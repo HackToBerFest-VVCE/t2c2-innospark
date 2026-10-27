@@ -1,65 +1,142 @@
-# SkillBridge AI
+# SkillBridge AI — Personalized Career Agent
 
-SkillBridge AI is a personalized career-guidance platform for turning resume
-evidence into practical next steps. It combines transparent backend rules with
-a responsive React dashboard so a user can analyze a resume, compare roles,
-match a real job description, and generate a focused 30-day learning plan.
+SkillBridge AI is an evidence-based, personalized career-guidance platform that transforms raw resume experience into transparent role recommendations, target skill-gap breakdowns, real-world job description matching, an interactive 30-day learning curriculum, and profile-grounded career mentoring.
 
-## Features
+Rather than presenting siloed tools, SkillBridge AI functions as an **autonomous career agent**: gaps detected from a target role or pasted job description automatically sequence into a customized 30-day roadmap and inform profile-grounded coaching.
 
-- In-memory PDF resume parsing with PyMuPDF and keyword-based skill extraction.
-- Eight deterministic career paths with explainable required/optional skill
-  scoring.
-- Skill-gap analysis for a selected role.
-- Job-description matching with detected skills, required gaps, coverage, and
-  evidence snippets from the pasted description.
-- 30-day roadmap generation with four weekly groups and measurable deliverables.
-- Roadmap focus skills can be supplied by the job matcher.
-- Profile-grounded deterministic career mentor responses.
-- Responsive React/Vite dashboard with light/dark themes and live API status.
-- No resume files or resume text are saved permanently by the backend or browser.
+---
 
-Match percentages are rule-based estimates. They are not hiring probabilities
-or guarantees of employment.
+## Key Features
 
-## Architecture
+1. **In-Memory Resume PDF Parsing & Skill Extraction (Intelligent Workspace)**
+   - High-throughput text extraction using PyMuPDF (`fitz`).
+   - Zero-disk storage policy: resumes are processed entirely in RAM and immediately garbage-collected.
+   - Categorized technical skill extraction across Languages, Frameworks, Databases, and DevOps with search and category filters.
+   - Built-in sample developer resume available for instant 1-click evaluation.
+   - Structural section audit with text excerpt drawers and page-level verbatim citations.
+   - Target Role Readiness gauge with explainable 3-column match breakdown and transparent scoring formulas.
+   - Ethical Resume Improvement Studio using the Problem-Action-Result (PAR) framework with before/after comparisons and accept/reject controls (never hallucinates metrics).
+   - In-Analyzer Job Description Matcher with quick presets and bridge to deep skill gap modules.
+   - Downloadable vector PDF career readiness report generated via `/api/resume/report` alongside clean browser print stylesheets.
+   - Clear distinction between extracted document claims and verified external credentials.
+
+2. **Explainable Job-Role Recommendations (8 Industry Paths)**
+   - Evaluates profiles against 8 canonical career paths: *Python Developer, Frontend Developer, Data Analyst, Backend Developer, Full Stack Developer, Machine Learning Engineer, DevOps Engineer, QA Automation Engineer*.
+   - Explainable scoring formula: 80% weight on core mandatory skills + 20% bonus on optional complementary tools.
+   - Clear textual reasoning for every recommendation (explaining matched vs missing requirements).
+
+3. **Target Role Skill-Gap Analysis**
+   - Interactive role switcher providing instant coverage percentage metrics.
+   - Three-tier breakdown: Core Matched Skills, Priority Gaps to Learn, and Optional Competitive Advantages.
+   - Direct bridges to generate focused learning roadmaps or consult the mentor.
+
+4. **Real-World Job Description Matcher (Career Agent Differentiator)**
+   - Extracts explicit skill requirements directly from real job postings.
+   - Pulls contextual evidence snippets quoted verbatim from the job description.
+   - Identifies candidate's matched skills and specific missing requirements.
+   - **Agentic Bridge**: 1-click transfer of detected job gaps into the 30-Day Learning Roadmap and pre-filled Career Mentor consultations.
+
+5. **Personalized 30-Day Learning Roadmap**
+   - Structured 4-week progression: *Week 1 Foundations, Week 2 Guided Practice, Week 3 Applied Integration, Week 4 Capstone Mini-Project*.
+   - 30 distinct daily tasks with actionable deliverables and verified documentation links.
+   - Configurable daily learning commitment (30, 60, 90, 120 minutes/day).
+   - Task completion tracking persisted through the local SQLite profile store.
+   - Job-match gaps can be passed as explicit roadmap focus skills.
+
+6. **Profile-Grounded AI Career Mentor**
+   - Grounded strictly in the candidate's verified profile evidence and target role.
+   - Intent-aware responses tailored for technical interviews, portfolio architecture, resume tailoring, learning order, or career transition readiness.
+   - Concrete 3-step action plans for every inquiry.
+   - Optional LLM integration via environment variables (`GEMINI_API_KEY` / `OPENAI_API_KEY`) with immediate deterministic fallback for zero downtime.
+
+7. **Career Readiness Dashboard**
+   - Evidence-based composite Career Readiness Score (0–100%) synthesizing skill match coverage, verified profile breadth, and roadmap momentum.
+   - Visual tier indicators (*Early Explorer, Skill Builder, Interview Contender, Role-Ready Contender*).
+   - Responsive dark and light theme support with WCAG AA readable contrast.
+   - Saved job-match history for revisiting analyzed opportunities.
+
+> **Responsible AI Notice**: SkillBridge AI match percentages and recommendations are rule-based estimates of syllabus overlap and skill evidence. They do not constitute hiring probabilities or guarantees of employment.
+
+---
+
+## System Architecture
 
 ```text
-frontend/
-  src/App.jsx             React dashboard and page state
-  src/services/api.js     Shared API client and request contracts
-backend/
-  app/main.py             FastAPI routes and PDF extraction
-  app/skill_gap.py        Canonical role catalog and gap logic
-  app/recommendations.py  Explainable role ranking
-  app/job_matcher.py      Job-description skill/evidence matcher
-  app/roadmap.py          Deterministic 30-day roadmap generator
-  app/mentor.py           Profile-grounded mentor response logic
-  tests/                  API and service regression tests
+t2c2-innospark/
+├── backend/
+│   ├── app/
+│   │   ├── main.py             # FastAPI application, CORS, PDF endpoint & routing
+│   │   ├── skill_gap.py        # Canonical 8-role catalog & gap calculation engine
+│   │   ├── recommendations.py  # Transparent 8-role explainable ranking engine
+│   │   ├── job_matcher.py      # Real-world job description parser & evidence extractor
+│   │   ├── roadmap.py          # 30-day deliverable curriculum & capstone generator
+│   │   └── mentor.py           # Intent-aware, profile-grounded career advisory engine
+│   └── tests/                  # Pytest unit, integration, and E2E workflow suite
+│       ├── test_e2e_agent_workflow.py
+│       ├── test_health.py
+│       ├── test_job_matcher.py
+│       ├── test_mentor.py
+│       ├── test_recommendations.py
+│       ├── test_resume_analyze.py
+│       ├── test_roadmap.py
+│       └── test_skill_gap.py
+├── frontend/
+│   ├── public/
+│   │   └── sample_resume.pdf   # Pre-packaged developer PDF for instant testing
+│   ├── src/
+│   │   ├── components/         # Modular React components
+│   │   │   ├── common/Icons.jsx
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── Topbar.jsx
+│   │   │   ├── Overview.jsx    # Career Readiness Dashboard
+│   │   │   ├── ResumeAnalyzer.jsx
+│   │   │   ├── Recommendations.jsx
+│   │   │   ├── SkillGapPage.jsx
+│   │   │   ├── JobMatcher.jsx  # Job Matcher & Agent Bridge
+│   │   │   ├── RoadmapPage.jsx # Interactive 30-day curriculum
+│   │   │   ├── MentorPage.jsx
+│   │   │   └── Settings.jsx
+│   │   ├── constants/          # Shared navigation and role constants
+│   │   │   ├── navigation.js
+│   │   │   └── roles.js
+│   │   ├── services/
+│   │   │   └── api.js          # Centralized HTTP client and API contracts
+│   │   ├── App.jsx             # Clean state orchestrator
+│   │   ├── App.css             # Theme variables, high-contrast & responsive styles
+│   │   └── main.jsx
+│   └── package.json
+└── README.md
 ```
 
-The role catalog lives in `backend/app/skill_gap.py` and is reused by
-recommendations, matching, roadmap generation, and mentor guidance. There is
-no paid API or required LLM integration.
+---
 
-## Setup
+## Setup & Running
 
-### Backend
+### Prerequisites
+- Python 3.10+ (tested on Python 3.12)
+- Node.js 18+ and npm
 
-The repository uses the existing Windows virtual environment:
+### 1. Backend Setup
+
+From the `t2c2-innospark` directory, activate the existing virtual environment or create a new one:
 
 ```powershell
+# Using the pre-configured virtual environment on Windows
 Set-Location "C:\Users\Bindhu Shree KR\OneDrive\Desktop\Hacktoberfest\t2c2-innospark"
 & ".\.venv\Scripts\uvicorn.exe" backend.app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-If setting up a fresh environment, install the runtime dependencies:
-
+*Fresh environment alternative:*
 ```powershell
-python -m pip install fastapi uvicorn pymupdf python-multipart pytest
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install fastapi uvicorn pymupdf python-multipart pytest httpx
+uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### Frontend
+### 2. Frontend Setup
+
+From the `t2c2-innospark\frontend` directory:
 
 ```powershell
 Set-Location "C:\Users\Bindhu Shree KR\OneDrive\Desktop\Hacktoberfest\t2c2-innospark\frontend"
@@ -67,83 +144,119 @@ npm install
 npm run dev
 ```
 
-The frontend defaults to `http://127.0.0.1:8000`. To use another backend:
+The frontend will be accessible at `http://127.0.0.1:5173`. It connects automatically to `http://127.0.0.1:8000`.
 
-```powershell
-$env:VITE_API_BASE_URL="http://127.0.0.1:8000"
-npm run dev
-```
+---
 
-## API endpoints
+## API Reference
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | `/api/health` | API health and project name |
-| POST | `/api/resume/analyze` | Upload a PDF using multipart field `file` |
-| POST | `/api/roles/recommend` | Rank eight roles from a `skills` list |
-| POST | `/api/skills/gap` | Compare skills with a target role |
-| POST | `/api/jobs/match` | Match `job_description`, `skills`, and optional `target_role` |
-| POST | `/api/roadmap/generate` | Generate a 30-day plan; accepts optional `focus_skills` |
-| POST | `/api/mentor/ask` | Return deterministic guidance from `question`, `target_role`, and `skills` |
+| Method | Endpoint | Description | Sample Request |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/health` | Service health status | *None* |
+| **POST** | `/api/resume/analyze` | In-memory PDF text, skill extraction, evidence snippets, and detected section signals | `multipart/form-data` with `file=@resume.pdf` |
+| **POST** | `/api/resume/report` | Generate high-resolution downloadable vector PDF career readiness report | `{"target_role": "Python Developer", "skills": [...], "readiness_score": 75}` |
+| **GET/PUT** | `/api/profile` | Read or update confirmed profile skills and preferences | `{"skills": ["Python"], "target_role": "Python Developer"}` |
+| **POST** | `/api/roles/recommend` | Explainable ranking across 8 roles | `{"skills": ["Python", "SQL", "Git"]}` |
+| **POST** | `/api/portfolio/projects` | Generate a role-specific portfolio project plan | `{"target_role": "Python Developer", "skills": ["Python"]}` |
+| **POST** | `/api/interview/prepare` | Generate role-specific interview questions and a study plan | `{"target_role": "Python Developer", "skills": ["Python"]}` |
+| **POST** | `/api/skills/gap` | Compare candidate skills with role catalog | `{"target_role": "Python Developer", "skills": ["Python"]}` |
+| **POST** | `/api/jobs/match` | Match job posting, extract evidence & gaps | `{"job_description": "...", "skills": [...], "target_role": "..."}` |
+| **POST** | `/api/roadmap/generate`| Generate 30-day curriculum with deliverables | `{"target_role": "...", "skills": [...], "daily_minutes": 60}` |
+| **POST** | `/api/mentor/ask` | Intent-aware, profile-grounded career coaching | `{"question": "...", "target_role": "...", "skills": [...]}` |
+| **GET/PUT** | `/api/roadmap/progress` | Read or save completed roadmap days | `{"target_role": "Python Developer", "completed_days": [1, 2]}` |
+| **GET/POST** | `/api/jobs/matches` | List or save analyzed job matches | `{"title": "...", "description": "...", "result": {...}}` |
+| **GET** | `/api/applications` | List application records, optionally filtered by status | `/api/applications?status=interview` |
+| **POST** | `/api/applications` | Create a saved job application record | `{"company": "Acme", "job_title": "Python Developer"}` |
+| **PUT** | `/api/applications/{id}` | Update status, dates, notes, or job details | `{"company": "Acme", "job_title": "Python Developer", "status": "applied"}` |
+| **DELETE** | `/api/applications/{id}` | Remove an application record | *None* |
 
-Example job matcher request:
+---
 
-```json
-{
-  "target_role": "Python Developer",
-  "skills": ["Python", "Git"],
-  "job_description": "Build Python REST APIs, write SQL, and collaborate with Git."
-}
-```
+## Testing & Quality Assurance
 
-## Testing and quality checks
-
-Run backend tests:
-
+### Run Backend Tests (35 tests)
 ```powershell
 Set-Location "C:\Users\Bindhu Shree KR\OneDrive\Desktop\Hacktoberfest\t2c2-innospark"
-& ".\.venv\Scripts\python.exe" -m pytest backend\tests -q
+& ".\.venv\Scripts\python.exe" -m pytest backend\tests -v
 ```
 
-Run frontend checks:
+*Coverage includes:*
+- End-to-end full career agent workflow (`test_e2e_agent_workflow.py`).
+- Deterministic roadmap generation across all 8 catalog roles without KeyError (`test_roadmap.py`).
+- PyMuPDF in-memory parsing, size limit rejection (5MB), non-PDF rejection, and empty PDF detection (`test_resume_analyze.py`).
+- Job description matcher evidence extraction and role scoping (`test_job_matcher.py`).
+- Career mentor intent branches (interview, portfolio, resume, transition, learning) and empty input validation (`test_mentor.py`).
+- Skill gap edge cases, casing, and whitespace normalization (`test_skill_gap.py`).
 
+### Run Frontend Lint & Build
 ```powershell
 Set-Location "C:\Users\Bindhu Shree KR\OneDrive\Desktop\Hacktoberfest\t2c2-innospark\frontend"
 npm run lint
 npm run build
 ```
 
-## Hackathon demonstration workflow
+---
 
-1. Start FastAPI and Vite using the commands above.
-2. Open the dashboard and confirm the API indicator is online.
-3. Upload a text-based PDF resume in **Resume Analyzer**.
-4. Review the detected skills and open **Job Recommendations** to see the
-   live, explainable ranking across eight roles.
-5. Open **Skill Gap**, select a target role, and inspect required versus
-   optional skills.
-6. Paste a genuine job description in **Job Description Match**. Review
-   detected skills, matched profile skills, missing required skills, and
-   evidence snippets.
-7. Select **Build roadmap from these gaps** to create a 30-day plan focused on
-   the matcher results.
-8. Open **Career Mentor** and ask what to learn next. The response is grounded
-   in the same analyzed profile and target role.
-9. Mark roadmap tasks complete to demonstrate progress tracking.
+## Hackathon Demonstration Walkthrough
 
-### Screenshots
+Follow this step-by-step workflow during judging or presentation:
 
-The responsive UI can be previewed live at `http://127.0.0.1:5173` after
-starting Vite. No static screenshots are committed to this repository; capture
-the running dashboard for the hackathon submission so the image reflects the
-current build.
+1. **Dashboard & System Health**
+   - Launch the dashboard at `http://127.0.0.1:5173`.
+   - Observe the green `API online` indicator on the sidebar and the `Demo Profile` badge in the top bar.
+   - Inspect the **Career Readiness Index** orb, displaying evidence-based composite scores for the default profile.
 
-## GitHub Copilot usage
+2. **Resume PDF Intelligence**
+   - Click **Resume Analyzer** in the navigation.
+   - Click **"Use Sample Developer Resume"** (or upload your own PDF).
+   - Watch the in-memory PyMuPDF parser extract 17 technical skills with character-accurate preview.
+   - Notice the top bar badge transition to **Verified Resume**.
 
-GitHub Copilot was used as a coding assistant to help inspect existing project
-structure, suggest modular implementation patterns, generate initial test
-scaffolding, and iterate on frontend/backend integration. All generated
-changes were reviewed against the repository's API contracts, executed with
-the local test/build commands, and adjusted where tests exposed mismatches.
-Copilot did not receive credentials, resume files, or other secrets, and no
-commit or push was performed automatically.
+3. **Explainable Role Recommendations**
+   - Navigate to **Job Recommendations**.
+   - Review explainable match percentages across all 8 career paths (e.g., Python Developer, Backend Developer, Data Analyst).
+   - Observe the explainability note indicating how many required and optional skills matched.
+
+4. **Skill-Gap Breakdown**
+   - Switch to **Skill Gap** and select **Machine Learning Engineer**.
+   - Inspect the 3-column breakdown: verified profile skills, missing core skills (e.g. *Machine Learning*), and optional advantages.
+
+5. **Real-World Job Description Matching (The Agent Differentiator)**
+   - Navigate to **Job Description Match**.
+   - Click one of the preset buttons: **"Python API Posting"** or **"React Frontend Posting"** (or paste your own posting).
+   - Click **Analyze Job Fit**.
+   - Review the matched skills, identified required gaps, and **Job Evidence Snippets** quoting verbatim sentences from the job posting.
+
+6. **Agentic Action: Transfer Gaps into Learning Roadmap**
+   - In the Job Matcher results, click **"Tailor 30-Day Roadmap with These Gaps"**.
+   - The application automatically transitions to the **Learning Roadmap** page with a banner: *Tailored from Job Matcher*.
+   - Review the 30-day curriculum grouped into 4 weekly milestones with specific deliverables.
+   - Check off Day 01 and Day 02 tasks; observe progress recalculation and persistence in `localStorage`.
+
+7. **Profile-Grounded Career Mentor**
+   - Open **Career Mentor**.
+   - Click the prompt chip: *"How do I prepare for technical interviews for this role?"*.
+   - The mentor returns tailored advice directly addressing your matched evidence, your missing gaps, and concrete preparation steps.
+
+---
+
+## GitHub Copilot Usage Documentation
+
+GitHub Copilot was utilized as an AI pair programmer throughout the development and refactoring of SkillBridge AI:
+
+1. **Architecture & Codebase Inspection**:
+   - Copilot assisted in auditing backend route handlers against existing frontend API calls to ensure zero contract breakage.
+   - Identified a latent `KeyError` vulnerability in `roadmap.py` where `ROLE_PROJECTS` was only defined for 3 of the 8 catalog roles.
+
+2. **Component Modularization**:
+   - Generated modular component scaffolds (`Sidebar`, `Topbar`, `Overview`, `JobMatcher`, `RoadmapPage`, `MentorPage`, `ResumeAnalyzer`, `Settings`) extracting 400+ lines of monolithic code into clean, single-responsibility files.
+   - Refactored shared constants (`roles.js`, `navigation.js`) to adhere strictly to Fast Refresh and clean architecture patterns.
+
+3. **Intent Detection & Guidance Logic**:
+   - Guided the rule-based intent categorization in `mentor.py`, ensuring tailored responses for interview prep, portfolio architecture, resume improvement, and career transition scenarios.
+
+4. **Comprehensive Test Suite Generation**:
+   - Synthesized parametrized test cases covering all 8 catalog paths, intent classifications, edge-case PDF handling, and the complete end-to-end agent workflow (`test_e2e_agent_workflow.py`).
+
+5. **Security & Privacy Guardrails**:
+   - Ensured that no credentials, API keys, or resume binary payloads were logged or persisted to disk. All Copilot-suggested code was manually verified against the hackathon criteria before integration.

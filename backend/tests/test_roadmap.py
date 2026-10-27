@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.main import app
 from backend.app.roadmap import generate_roadmap
+from backend.app.skill_gap import JOB_ROLE_SKILL_CATALOG
 
 
 client = TestClient(app)
@@ -87,3 +88,16 @@ def test_roadmap_accepts_matcher_focus_skills() -> None:
 
     assert response.status_code == 200
     assert response.json()["tasks"][0]["topic"].startswith("Git")
+
+
+def test_roadmap_succeeds_for_all_catalog_roles() -> None:
+    for role in JOB_ROLE_SKILL_CATALOG:
+        response = client.post(
+            "/api/roadmap/generate",
+            json={"target_role": role, "skills": ["Python"]},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["tasks"]) == 30
+        assert data["target_role"] == role
+        assert data["final_mini_project"]

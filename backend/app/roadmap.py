@@ -20,12 +20,20 @@ RESOURCE_LINKS = {
     "Machine Learning": "https://developers.google.com/machine-learning/crash-course",
     "NLP": "https://huggingface.co/learn/nlp-course/chapter1/1",
     "GitHub": "https://docs.github.com/en/get-started/start-your-journey",
+    "PostgreSQL": "https://www.postgresql.org/docs/current/tutorial.html",
+    "Java": "https://dev.java/learn/",
+    "C": "https://en.cppreference.com/w/c",
 }
 
 ROLE_PROJECTS = {
     "Python Developer": "Build and document a small Python API that stores and serves a useful dataset.",
     "Frontend Developer": "Build a responsive role-relevant web interface with a small interactive feature.",
     "Data Analyst": "Produce a short analysis of a dataset with cleaned data, charts, and written findings.",
+    "Backend Developer": "Design and document a production-grade backend service with database schema, CRUD endpoints, and authentication.",
+    "Full Stack Developer": "Build and deploy an end-to-end full stack web application with reactive frontend, REST API, and database integration.",
+    "Machine Learning Engineer": "Develop and evaluate an end-to-end ML model pipeline with dataset preprocessing, evaluation metrics, and API inference.",
+    "DevOps Engineer": "Create an automated CI/CD pipeline with Docker containerization, linting, unit testing, and deployment automation.",
+    "QA Automation Engineer": "Design and execute an automated testing framework with unit tests, API integration tests, and test coverage reporting.",
 }
 
 WEEK_LENGTHS = (7, 7, 7, 9)
@@ -100,6 +108,11 @@ def generate_roadmap(
     if not prioritized_skills:
         prioritized_skills = matched_required or matched_optional
 
+    project_description = ROLE_PROJECTS.get(
+        role_name,
+        f"Build and document an end-to-end portfolio project demonstrating your core skills in {role_name}."
+    )
+
     tasks: list[dict[str, int | str]] = []
     for day in range(1, 31):
         if day <= len(prioritized_skills):
@@ -113,7 +126,7 @@ def generate_roadmap(
             task = _make_task(
                 day,
                 f"{role_name} mini-project",
-                f"Complete and polish the final mini-project: {ROLE_PROJECTS[role_name]}",
+                f"Complete and polish the final mini-project: {project_description}",
                 daily_minutes,
                 "Publish or package the project with a README, screenshots or sample output, and next steps.",
             )
@@ -156,5 +169,5 @@ def generate_roadmap(
         "weekly_goals": weekly_goals,
         "weeks": weeks,
         "tasks": tasks,
-        "final_mini_project": ROLE_PROJECTS[role_name],
+        "final_mini_project": project_description,
     }
