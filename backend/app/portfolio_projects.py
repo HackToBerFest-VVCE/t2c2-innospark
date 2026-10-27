@@ -67,7 +67,14 @@ def _validate_skills(skills: Iterable[str]) -> list[str]:
     return validated
 
 
-def generate_portfolio_project(user_skills: Iterable[str], target_role: str) -> dict:
+def generate_portfolio_project(
+    user_skills: Iterable[str],
+    target_role: str,
+    focus_skills: Iterable[str] | None = None,
+    job_requirements: Iterable[str] | None = None,
+    experience_level: str = "exploring",
+    daily_minutes: int = 60,
+) -> dict:
     """Create a deterministic, role-specific portfolio project plan."""
     if not isinstance(target_role, str) or not target_role.strip():
         raise ValueError("target_role must be a non-empty string.")
@@ -87,26 +94,44 @@ def generate_portfolio_project(user_skills: Iterable[str], target_role: str) -> 
     gap = analyze_skill_gap(skills, role_name)
     blueprint = PROJECT_BLUEPRINTS[role_name]
     missing = gap["missing_required_skills"]
-    priority_skills = list(missing) + [
+    requested = [skill.strip() for skill in (focus_skills or []) if isinstance(skill, str) and skill.strip()]
+    job_skills = [skill.strip() for skill in (job_requirements or []) if isinstance(skill, str) and skill.strip()]
+    priority_skills = list(dict.fromkeys(requested + job_skills + list(missing))) + [
         skill for skill in blueprint["stack"] if skill not in missing
     ]
     priority_skills = priority_skills[:4]
 
+    effort = max(4, round(300 / max(30, daily_minutes)))
     milestones = [
         {
             "phase": "Plan",
+            "title": "Define scope and acceptance criteria",
             "deliverable": f"Write a one-page scope and acceptance checklist for {blueprint['title']}.",
             "skills": priority_skills[:2],
+            "estimated_hours": effort,
+            "prerequisites": [],
+            "completion_criteria": "Scope, constraints, and acceptance checks are written and reviewable.",
+            "resource": "https://docs.github.com/en/get-started/writing-on-github",
         },
         {
             "phase": "Build",
+            "title": "Implement the smallest working version",
             "deliverable": f"Implement the smallest working version using {', '.join(priority_skills)}.",
             "skills": priority_skills,
+            "estimated_hours": effort * 3,
+            "prerequisites": ["Plan"],
+            "completion_criteria": "A user can run the core workflow locally from documented instructions.",
+            "resource": "https://12factor.net/",
         },
         {
             "phase": "Prove",
+            "title": "Test and document the deliverable",
             "deliverable": "Add tests, a README with setup steps, and one screenshot or sample output.",
             "skills": ["Git", "communication"],
+            "estimated_hours": effort * 2,
+            "prerequisites": ["Build"],
+            "completion_criteria": "Tests pass and README evidence is supplied without claiming unverified deployment.",
+            "resource": "https://docs.github.com/en/repositories/archiving-a-github-repository",
         },
     ]
     resume_bullets = [
@@ -132,4 +157,9 @@ def generate_portfolio_project(user_skills: Iterable[str], target_role: str) -> 
             "Keep commits focused and explain trade-offs in the project notes.",
         ],
         "stretch_goal": blueprint["stretch"],
+        "difficulty": "Foundational" if experience_level in {"exploring", "beginner"} else "Intermediate",
+        "estimated_hours": effort * 6,
+        "expected_deliverables": ["Working local project", "Automated tests", "README and sample output"],
+        "learning_objectives": [f"Demonstrate {skill} through a verifiable project artifact." for skill in priority_skills[:4]],
+        "job_requirements_used": job_skills,
     }

@@ -242,11 +242,24 @@ export function Loading({ text = 'Loading...' }) {
 
 export function PageIntro({ eyebrow, title, description, action }) {
   return (
-    <header className="page-intro">
-      <div>
-        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-        <h1>{title}</h1>
-        {description && <p>{description}</p>}
+    <header className="page-intro page-intro-neural">
+      <div className="page-intro-glow" aria-hidden="true" />
+      <div className="page-intro-circuits" aria-hidden="true">
+        <svg viewBox="0 0 600 160" fill="none" preserveAspectRatio="none">
+          <path d="M0 30 H180 V90 H340" className="intro-circuit-line" />
+          <circle cx="180" cy="30" r="3" className="intro-circuit-node" />
+          <circle cx="340" cy="90" r="3.5" className="intro-circuit-node active" />
+        </svg>
+      </div>
+      <div className="page-intro-content">
+        {eyebrow && (
+          <div className="intro-cyber-badge">
+            <span className="pulse-dot" />
+            <span className="eyebrow-text">{eyebrow}</span>
+          </div>
+        )}
+        <h1 className="intro-headline">{title}</h1>
+        {description && <p className="intro-description">{description}</p>}
       </div>
       {action && <div className="page-intro-action">{action}</div>}
     </header>

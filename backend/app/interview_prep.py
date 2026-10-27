@@ -54,12 +54,31 @@ def _questions_for_role(role: str) -> list[tuple[str, str]]:
     ]
 
 
-def generate_interview_plan(user_skills: Iterable[str], target_role: str) -> dict:
+def generate_interview_plan(
+    user_skills: Iterable[str],
+    target_role: str,
+    question_count: int | None = None,
+    difficulty: str = "Intermediate",
+    focus_skills: Iterable[str] | None = None,
+    job_requirements: Iterable[str] | None = None,
+) -> dict:
+    if question_count is not None and (question_count < 3 or question_count > 12):
+        raise ValueError("question_count must be between 3 and 12.")
+    if difficulty not in {"Foundational", "Intermediate", "Advanced"}:
+        raise ValueError("difficulty must be Foundational, Intermediate, or Advanced.")
     role = _role_name(target_role)
     gap = analyze_skill_gap(user_skills, role)
     missing = list(gap["missing_required_skills"])
     questions = _questions_for_role(role)
-    focus = missing[:3] or list(gap["matched_required_skills"])[:3]
+    requested_focus = [skill.strip() for skill in (focus_skills or []) if isinstance(skill, str) and skill.strip()]
+    job_focus = [skill.strip() for skill in (job_requirements or []) if isinstance(skill, str) and skill.strip()]
+    focus = list(dict.fromkeys(requested_focus + job_focus + missing))[:3] or list(gap["matched_required_skills"])[:3]
+    if question_count is not None and question_count < len(questions):
+        questions = questions[:question_count]
+    elif question_count is not None and question_count > len(questions):
+        questions = questions + [
+            ("Situational", f"How would you approach a production problem involving {focus[0] if focus else role}?"),
+        ] * (question_count - len(questions))
 
     return {
         "target_role": role,
@@ -70,6 +89,14 @@ def generate_interview_plan(user_skills: Iterable[str], target_role: str) -> dic
                 "id": index,
                 "category": category,
                 "question": question,
+                "type": "behavioral" if category == "Behavioral" else (
+                    "situational" if category in {"Problem solving", "Situational"} else (
+                        "project" if "project" in question.casefold() else "technical"
+                    )
+                ),
+                "source": "SkillBridge practice question",
+                "hint": f"Structure your answer around {focus[0]} and a concrete example." if focus else "Explain your reasoning, trade-offs, and outcome.",
+                "resources": [f"Review the fundamentals and trade-offs of {focus[0]}." if focus else "Review the role fundamentals."],
                 "evaluation_criteria": [
                     "Use a concrete example or implementation detail.",
                     "Explain one trade-off, limitation, or edge case.",
@@ -89,4 +116,43 @@ def generate_interview_plan(user_skills: Iterable[str], target_role: str) -> dic
             f"Your current core coverage is {gap['skill_coverage_percentage']}%. "
             f"Prioritize {', '.join(focus) if focus else 'project explanations'} before interviews."
         ),
+        "difficulty": difficulty,
+        "question_count": len(questions),
+        "job_requirements_used": job_focus,
+    }
+
+
+def evaluate_interview_answer(
+    question: str,
+    answer: str,
+    evaluation_criteria: Iterable[str] | None = None,
+) -> dict[str, object]:
+    if not isinstance(answer, str) or not answer.strip():
+        raise ValueError("answer must be a non-empty string.")
+    if len(answer) > 10_000:
+        raise ValueError("answer must be 10,000 characters or fewer.")
+    words = answer.split()
+    criteria = list(evaluation_criteria or [])
+    relevance = 100 if any(token.casefold() in answer.casefold() for token in question.split() if len(token) > 4) else 45
+    clarity = min(100, 40 + len(words) * 2)
+    completeness = min(100, 35 + (25 if criteria and len(words) >= 30 else 0) + (25 if len(words) >= 60 else 0))
+    technical = 70 if any(marker in answer.casefold() for marker in ("because", "trade-off", "test", "measure", "example")) else 45
+    score = round((relevance + clarity + completeness + technical) / 4, 2)
+    strengths = []
+    if relevance >= 70:
+        strengths.append("The answer addresses the question directly.")
+    if clarity >= 70:
+        strengths.append("The answer contains enough detail to follow the reasoning.")
+    missing = []
+    if completeness < 70:
+        missing.append("Add a concrete example, implementation detail, or outcome.")
+    if technical < 70:
+        missing.append("Explain the reasoning, trade-off, test, or measurable result.")
+    return {
+        "score": score,
+        "dimensions": {"relevance": relevance, "clarity": clarity, "completeness": completeness, "technical_accuracy": technical},
+        "strengths": strengths,
+        "missing_concepts": missing,
+        "coaching_feedback": "Use a concise structure: context, action, technical reasoning, and result. This is coaching feedback, not a hiring prediction.",
+        "question": question,
     }

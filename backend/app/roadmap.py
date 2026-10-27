@@ -46,7 +46,7 @@ def _validate_daily_minutes(daily_minutes: int) -> None:
         raise ValueError("daily_minutes must be between 15 and 240.")
 
 
-def _learning_topic(skill: str, day: int) -> tuple[str, str, str]:
+def _learning_topic(skill: str, day: int) -> tuple[str, str, str, str]:
     resource = RESOURCE_LINKS.get(skill)
     resource_text = f" Use {resource}." if resource else ""
     if day == 1:
@@ -54,27 +54,44 @@ def _learning_topic(skill: str, day: int) -> tuple[str, str, str]:
             f"{skill} fundamentals",
             f"Study the core concepts of {skill} and take concise notes.{resource_text}",
             f"Write a one-page summary of three {skill} concepts.",
+            "Learn the core vocabulary and complete a guided introduction.",
         )
     if day == 2:
         return (
             f"{skill} guided practice",
             f"Follow a beginner exercise focused on {skill}.{resource_text}",
             f"Complete one small {skill} exercise and record its result.",
+            "Follow a guided exercise, then repeat it without the walkthrough.",
         )
     return (
         f"{skill} applied practice",
         f"Apply {skill} to a small feature and review the result.{resource_text}",
         f"Commit or save a working {skill} example with a short explanation.",
+        "Build a small working example and explain the design choices.",
     )
 
 
-def _make_task(day: int, topic: str, activity: str, minutes: int, deliverable: str) -> dict[str, int | str]:
+def _make_task(
+    day: int,
+    topic: str,
+    activity: str,
+    minutes: int,
+    deliverable: str,
+    skill: str,
+    difficulty: str,
+    completion_criteria: str,
+    resource: str | None = None,
+) -> dict[str, int | str | None]:
     return {
         "day": day,
         "topic": topic,
         "learning_activity": activity,
         "estimated_minutes": minutes,
         "deliverable": deliverable,
+        "skill": skill,
+        "difficulty": difficulty,
+        "completion_criteria": completion_criteria,
+        "resource": resource,
     }
 
 
@@ -92,10 +109,9 @@ def generate_roadmap(
     matched_required = list(gap["matched_required_skills"])
     matched_optional = list(gap["matched_optional_skills"])
 
-    prioritized_skills = missing_required + [
-        skill for skill in gap.get("matched_optional_skills", [])
-        if skill not in missing_required
-    ]
+    prioritized_skills = [
+        item["skill"] for item in gap.get("prioritized_gaps", [])
+    ] or missing_required
     if focus_skills is not None:
         if isinstance(focus_skills, (str, bytes)):
             raise ValueError("focus_skills must be a list of skill names.")
@@ -113,7 +129,7 @@ def generate_roadmap(
         f"Build and document an end-to-end portfolio project demonstrating your core skills in {role_name}."
     )
 
-    tasks: list[dict[str, int | str]] = []
+    tasks: list[dict[str, object]] = []
     for day in range(1, 31):
         if day <= len(prioritized_skills):
             skill = prioritized_skills[day - 1]
@@ -129,6 +145,9 @@ def generate_roadmap(
                 f"Complete and polish the final mini-project: {project_description}",
                 daily_minutes,
                 "Publish or package the project with a README, screenshots or sample output, and next steps.",
+                role_name,
+                "Advanced",
+                "The project runs, is tested, documented, and ready to demonstrate.",
             )
         elif day in (7, 14, 21):
             week_number = day // 7
@@ -138,10 +157,24 @@ def generate_roadmap(
                 f"Review the week's {skill} work and combine the exercises into one coherent practice task.",
                 daily_minutes,
                 f"Submit a checklist and a working review exercise covering {skill}.",
+                skill,
+                "Intermediate",
+                f"Complete the review exercise and record what you can explain about {skill}.",
+                RESOURCE_LINKS.get(skill),
             )
         else:
-            topic, activity, deliverable = _learning_topic(skill, day)
-            task = _make_task(day, topic, activity, daily_minutes, deliverable)
+            topic, activity, deliverable, completion_criteria = _learning_topic(skill, day)
+            task = _make_task(
+                day,
+                topic,
+                activity,
+                daily_minutes,
+                deliverable,
+                skill,
+                "Foundational" if day <= 6 else "Intermediate",
+                completion_criteria,
+                RESOURCE_LINKS.get(skill),
+            )
         tasks.append(task)
 
     weekly_goals = [
@@ -170,4 +203,5 @@ def generate_roadmap(
         "weeks": weeks,
         "tasks": tasks,
         "final_mini_project": project_description,
+        "focus_skills": prioritized_skills,
     }

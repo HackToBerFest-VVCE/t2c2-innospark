@@ -55,6 +55,21 @@ Rather than presenting siloed tools, SkillBridge AI functions as an **autonomous
    - Responsive dark and light theme support with WCAG AA readable contrast.
    - Saved job-match history for revisiting analyzed opportunities.
 
+8. **Advanced Career Intelligence**
+   - Profile-grounded alternative career paths with reasons, missing skills, and estimated preparation effort.
+   - Adaptive next-task guidance based on the selected role, saved roadmap progress, and available daily study time.
+   - Prioritized action plan linking skill gaps, roadmap work, portfolio projects, and interview practice.
+   - Job-market sample insights computed only from saved job descriptions supplied by the user; no live market statistics are claimed.
+   - The existing Career Mentor remains the conversational assistant and uses the same deterministic profile-grounded fallback when an optional provider is unavailable.
+
+9. **Career Copilot**
+   - Unifies role gaps, the existing roadmap, saved job comparisons, projects, interviews, and application dates in a prioritized workspace.
+   - Produces daily and weekly suggestions with reason, expected benefit, and an effort estimate only when the source provides one.
+   - Lets users accept, dismiss, postpone, or complete suggestions; custom plan tasks, reminder preferences, and action statuses persist in SQLite.
+   - Offers short-session deterministic guidance based on saved workspace summaries without calling an external AI service or sending resume text/private application notes.
+   - Starts idempotent, reviewable application-preparation checklists that link to existing features. The checklist does not submit applications or make consequential changes.
+   - Displays in-app application deadline/follow-up reminders only after opt-in. No background scheduler, email, push, or external notifications are implemented.
+
 > **Responsible AI Notice**: SkillBridge AI match percentages and recommendations are rule-based estimates of syllabus overlap and skill evidence. They do not constitute hiring probabilities or guarantees of employment.
 
 ---
@@ -70,7 +85,9 @@ t2c2-innospark/
 │   │   ├── recommendations.py  # Transparent 8-role explainable ranking engine
 │   │   ├── job_matcher.py      # Real-world job description parser & evidence extractor
 │   │   ├── roadmap.py          # 30-day deliverable curriculum & capstone generator
-│   │   └── mentor.py           # Intent-aware, profile-grounded career advisory engine
+│   │   ├── mentor.py           # Intent-aware, profile-grounded career advisory engine
+│   │   ├── intelligence.py     # Career paths, adaptive learning, action plans & sample insights
+│   │   └── copilot.py          # Next actions, daily/weekly planning, private guidance
 │   └── tests/                  # Pytest unit, integration, and E2E workflow suite
 │       ├── test_e2e_agent_workflow.py
 │       ├── test_health.py
@@ -95,6 +112,7 @@ t2c2-innospark/
 │   │   │   ├── JobMatcher.jsx  # Job Matcher & Agent Bridge
 │   │   │   ├── RoadmapPage.jsx # Interactive 30-day curriculum
 │   │   │   ├── MentorPage.jsx
+│   │   │   ├── Copilot.jsx     # Career Copilot workspace and preparation workflows
 │   │   │   └── Settings.jsx
 │   │   ├── constants/          # Shared navigation and role constants
 │   │   │   ├── navigation.js
@@ -157,6 +175,7 @@ The frontend will be accessible at `http://127.0.0.1:5173`. It connects automati
 | **POST** | `/api/resume/report` | Generate high-resolution downloadable vector PDF career readiness report | `{"target_role": "Python Developer", "skills": [...], "readiness_score": 75}` |
 | **GET/PUT** | `/api/profile` | Read or update confirmed profile skills and preferences | `{"skills": ["Python"], "target_role": "Python Developer"}` |
 | **POST** | `/api/roles/recommend` | Explainable ranking across 8 roles | `{"skills": ["Python", "SQL", "Git"]}` |
+| **POST** | `/api/intelligence/overview` | Recalculate career paths, adaptive learning, action plan, and supplied-job sample insights | `{"target_role": "Python Developer", "skills": ["Python"], "completed_days": [1]}` |
 | **POST** | `/api/portfolio/projects` | Generate a role-specific portfolio project plan | `{"target_role": "Python Developer", "skills": ["Python"]}` |
 | **POST** | `/api/interview/prepare` | Generate role-specific interview questions and a study plan | `{"target_role": "Python Developer", "skills": ["Python"]}` |
 | **POST** | `/api/skills/gap` | Compare candidate skills with role catalog | `{"target_role": "Python Developer", "skills": ["Python"]}` |
@@ -169,12 +188,68 @@ The frontend will be accessible at `http://127.0.0.1:5173`. It connects automati
 | **POST** | `/api/applications` | Create a saved job application record | `{"company": "Acme", "job_title": "Python Developer"}` |
 | **PUT** | `/api/applications/{id}` | Update status, dates, notes, or job details | `{"company": "Acme", "job_title": "Python Developer", "status": "applied"}` |
 | **DELETE** | `/api/applications/{id}` | Remove an application record | *None* |
+| **GET** | `/api/copilot/dashboard` | Build next actions, plans, in-app reminders, and workflow summaries from saved workspace records | *None* |
+| **PUT** | `/api/copilot/actions/{action_id}` | Persist an allowlisted action status: accepted, dismissed, postponed, or completed | `{"status": "accepted"}` |
+| **PUT** | `/api/copilot/preferences` | Persist the in-app reminder opt-in | `{"reminders_enabled": true}` |
+| **POST** | `/api/copilot/chat` | Deterministic workspace guidance using recent request context | `{"question": "What next?", "context": []}` |
+| **POST** | `/api/copilot/workflows/{application_id}` | Create or return the single preparation checklist for an existing application | *None* |
+| **PUT** | `/api/copilot/workflows/{application_id}` | Mark one allowed preparation step complete/incomplete | `{"step_id": "review-requirements", "completed": true}` |
+| **GET/POST** | `/api/copilot/plan-tasks` | List or add a user-edited daily/weekly plan task | `{"title": "Review SQL notes", "period": "daily"}` |
+| **PUT/DELETE** | `/api/copilot/plan-tasks/{task_id}` | Edit, complete, or remove a personal Copilot plan task | `{"completed": true}` |
+
+### Intelligence data limitations
+
+`/api/intelligence/overview` is deterministic and uses profile, roadmap progress,
+saved job-match results, saved portfolio projects, and completed interview sessions
+provided by the application context. The current repository does not yet contain
+authentication middleware, user IDs, or ownership columns; these records are local
+workspace data and must not be deployed as a multi-user service until authorization
+is added. Job-market insights are descriptive counts from saved user samples, with
+no external collection date, geography, experience-level segmentation, or trend
+inference. Optional `GEMINI_API_KEY` or `OPENAI_API_KEY` values are used only by the
+existing mentor integration; the intelligence endpoint does not send private profile
+data to an external provider.
+
+### Phase 12 Copilot architecture, ranking, and limits
+
+The Career Copilot UI calls `/api/copilot/dashboard`; the backend assembles the current
+profile, saved roadmap progress, saved job matches, projects, interview sessions, and
+application records from the existing SQLite store. It calls the existing role-gap
+and roadmap generators instead of maintaining another skill catalog or overwriting
+the saved 30-day roadmap.
+
+Recommendation priorities are deterministic: recent overdue application follow-ups
+and deadlines rank highest (priority 120-125), dates due within seven days follow
+(115-120), interview-stage applications and role gaps follow (100-110), then the
+first incomplete roadmap task (90), incomplete portfolio work and saved interview
+feedback. Lower priority is used for project planning and additional interview
+review. Daily suggestions use the profile's daily-minute setting and available
+effort estimates; custom daily/weekly tasks remain separately stored. Dismissed,
+postponed, and completed suggestions are excluded from generated plans. This is
+guidance, not a hiring score or prediction.
+
+Copilot chat uses deterministic, bounded response branches based on the saved role
+and recommendations; it does not call an LLM. Recent conversation context is held
+only in the mounted frontend workspace and sent to the local API for follow-up intent
+resolution; it is not stored in SQLite. Workflow creation is allowlisted and
+idempotent per application, step IDs are validated, and actions are suggestions or
+checklists only. No arbitrary model output is executed.
+
+No new environment variables are required. SQLite location continues to use
+`SKILLBRIDGE_DB_PATH` when configured, otherwise the existing local database path.
+In-app reminders are opt-in and display saved dates only; the app has no background
+scheduler or external notification service. This repository still has no login,
+authentication middleware, user IDs, or record ownership checks. Copilot and
+existing records are therefore local single-workspace data and must not be exposed
+as a multi-user service until authentication and authorization are implemented.
+The reminder preference is not consent for email, push, or external contact; those
+actions are not implemented.
 
 ---
 
 ## Testing & Quality Assurance
 
-### Run Backend Tests (35 tests)
+### Run Backend Tests (77 tests, latest verified run)
 ```powershell
 Set-Location "C:\Users\Bindhu Shree KR\OneDrive\Desktop\Hacktoberfest\t2c2-innospark"
 & ".\.venv\Scripts\python.exe" -m pytest backend\tests -v
@@ -187,6 +262,7 @@ Set-Location "C:\Users\Bindhu Shree KR\OneDrive\Desktop\Hacktoberfest\t2c2-innos
 - Job description matcher evidence extraction and role scoping (`test_job_matcher.py`).
 - Career mentor intent branches (interview, portfolio, resume, transition, learning) and empty input validation (`test_mentor.py`).
 - Skill gap edge cases, casing, and whitespace normalization (`test_skill_gap.py`).
+- Career Copilot action ranking, empty profile/context handling, date-bound reminders, plan task persistence, idempotent workflows, allowlisted steps, and API error handling (`test_copilot.py`).
 
 ### Run Frontend Lint & Build
 ```powershell

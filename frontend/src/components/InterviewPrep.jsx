@@ -1,15 +1,49 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Icon, PageIntro } from './common/Icons'
 import { CATALOG_ROLES } from '../constants/roles'
 
-export function InterviewPrep({ role, setRole, plan, loading, error, prepare }) {
-  const [completed, setCompleted] = useState(new Set())
+export function InterviewPrep({
+  role, setRole, plan, loading, error, prepare, evaluateAnswer, saveSession, sessions = [], jobMatch, focusSkills = [],
+}) {
+  const [questionCount, setQuestionCount] = useState(6)
+  const [difficulty, setDifficulty] = useState('Intermediate')
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [answers, setAnswers] = useState({})
+  const [feedback, setFeedback] = useState({})
+  const [evaluationLoading, setEvaluationLoading] = useState(false)
+  const [evaluationError, setEvaluationError] = useState('')
+  const [sessionSaved, setSessionSaved] = useState(false)
+  const currentQuestion = plan?.questions?.[currentIndex]
+  const completedCount = Object.keys(feedback).length
+  const sessionScore = useMemo(() => {
+    const scores = Object.values(feedback).map((item) => item.score)
+    return scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : 0
+  }, [feedback])
 
-  function toggleQuestion(id) {
-    const next = new Set(completed)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setCompleted(next)
+  async function submitAnswer() {
+    if (!currentQuestion || !answers[currentQuestion.id]?.trim()) return
+    setEvaluationLoading(true)
+    setEvaluationError('')
+    try {
+      const result = await evaluateAnswer(currentQuestion.question, answers[currentQuestion.id], currentQuestion.evaluation_criteria)
+      setFeedback((current) => ({ ...current, [currentQuestion.id]: result }))
+    } catch (evaluationFailure) {
+      setEvaluationError(evaluationFailure.message)
+    } finally {
+      setEvaluationLoading(false)
+    }
+  }
+
+  async function completeSession() {
+    await saveSession({
+      target_role: plan.target_role,
+      difficulty: plan.difficulty,
+      question_count: plan.question_count,
+      score: sessionScore,
+      answers: plan.questions.map((question) => ({ question_id: question.id, answer: answers[question.id] || '', feedback: feedback[question.id] || null })),
+      recurring_gaps: focusSkills,
+    })
+    setSessionSaved(true)
   }
 
   return (
@@ -29,7 +63,19 @@ export function InterviewPrep({ role, setRole, plan, loading, error, prepare }) 
               {CATALOG_ROLES.map((catalogRole) => <option key={catalogRole}>{catalogRole}</option>)}
             </select>
           </label>
-          <button type="button" className="button primary" onClick={prepare} disabled={loading}>
+          <label>
+            Interview length
+            <select value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))}>
+              {[3, 6, 9, 12].map((count) => <option key={count} value={count}>{count} questions</option>)}
+            </select>
+          </label>
+          <label>
+            Difficulty
+            <select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}>
+              <option>Foundational</option><option>Intermediate</option><option>Advanced</option>
+            </select>
+          </label>
+          <button type="button" className="button primary" onClick={() => prepare({ questionCount, difficulty })} disabled={loading}>
             {loading ? <><span className="spinner" aria-hidden="true"></span> Preparing Questions...</> : <><Icon name="message" size={16} /> Prepare Interview</>}
           </button>
         </div>
@@ -51,26 +97,24 @@ export function InterviewPrep({ role, setRole, plan, loading, error, prepare }) 
 
           <div className="interview-layout">
             <section className="card">
-              <div className="card-heading">
-                <h2>Practice questions</h2>
-                <span className="count-badge good">{completed.size}/{plan.questions.length}</span>
-              </div>
-              <div className="interview-questions">
-                {plan.questions.map((item) => (
-                  <article key={item.id} className={completed.has(item.id) ? 'interview-question complete' : 'interview-question'}>
-                    <label>
-                      <input type="checkbox" checked={completed.has(item.id)} onChange={() => toggleQuestion(item.id)} />
-                      <span>
-                        <span className="eyebrow">{item.category} · Question {item.id}</span>
-                        <strong>{item.question}</strong>
-                      </span>
-                    </label>
-                    <ul>
-                      {item.evaluation_criteria.map((criterion) => <li key={criterion}>{criterion}</li>)}
-                    </ul>
-                  </article>
-                ))}
-              </div>
+              <div className="card-heading"><h2>Mock interview</h2><span className="count-badge good">{completedCount}/{plan.questions.length} evaluated</span></div>
+              {currentQuestion && (
+                <article className="interview-question">
+                  <span className="eyebrow">{currentQuestion.type} · Question {currentQuestion.id} · {currentQuestion.source}</span>
+                  <strong>{currentQuestion.question}</strong>
+                  <p className="small-muted">Hint: {currentQuestion.hint}</p>
+                  <textarea rows={7} value={answers[currentQuestion.id] || ''} onChange={(event) => setAnswers((current) => ({ ...current, [currentQuestion.id]: event.target.value }))} placeholder="Write your answer with context, action, reasoning, and result..." />
+                  <div className="interview-action-row">
+                    <button type="button" className="button primary" onClick={submitAnswer} disabled={evaluationLoading || !answers[currentQuestion.id]?.trim()}>{evaluationLoading ? 'Evaluating...' : 'Submit answer'}</button>
+                    {currentIndex > 0 && <button type="button" className="button secondary" onClick={() => setCurrentIndex((index) => index - 1)}>Previous</button>}
+                    {currentIndex < plan.questions.length - 1 && <button type="button" className="button secondary" onClick={() => setCurrentIndex((index) => index + 1)}>Next question</button>}
+                  </div>
+                  {evaluationError && <div className="inline-error" role="alert">{evaluationError}</div>}
+                  {feedback[currentQuestion.id] && <div className="interview-feedback"><strong>Score: {Math.round(feedback[currentQuestion.id].score)}%</strong><p>{feedback[currentQuestion.id].coaching_feedback}</p><b>Strengths</b><p>{feedback[currentQuestion.id].strengths.join(' ') || 'Keep building specificity.'}</p><b>Missing concepts</b><p>{feedback[currentQuestion.id].missing_concepts.join(' ') || 'No major gaps flagged by this rubric.'}</p></div>}
+                </article>
+              )}
+              {completedCount === plan.questions.length && !sessionSaved && <button type="button" className="button primary" onClick={completeSession}>Complete and save session</button>}
+              {sessionSaved && <div className="notice-bar"><Icon name="check" size={15} /> Session saved. Continue practicing the recurring topics: {focusSkills.join(', ') || 'role fundamentals'}.</div>}
             </section>
 
             <aside className="card">
@@ -79,6 +123,8 @@ export function InterviewPrep({ role, setRole, plan, loading, error, prepare }) 
               <ol className="interview-study-plan">
                 {plan.study_plan.map((step) => <li key={step}>{step}</li>)}
               </ol>
+              {jobMatch?.detected_required_skills?.length > 0 && <p className="small-muted">This plan includes requirements from your latest job comparison.</p>}
+              {sessions.length > 0 && <p className="small-muted">Completed sessions: {sessions.length}. Latest score: {Math.round(sessions[0].score)}%.</p>}
               <div className="notice-bar">
                 <Icon name="info" size={15} />
                 <span>Practice answers aloud. The checklist tracks preparation locally for this session and does not claim interview success.</span>

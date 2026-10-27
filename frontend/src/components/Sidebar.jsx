@@ -6,13 +6,11 @@ export function Sidebar({ page, navigate, mobileNav, setMobileNav }) {
     <>
       <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`} aria-label="Main Navigation">
         <div className="brand">
-          <div className="brand-mark" aria-hidden="true">
-            <Icon name="sparkle" size={20} />
-          </div>
-          <div className="brand-text">
-            <strong>SkillBridge</strong>
-            <span>AI Career Agent</span>
-          </div>
+          <img
+            className="brand-logo-image"
+            src="/skillbridge-logo.png"
+            alt="SkillBridge AI — AI powered personalized career guidance"
+          />
           <button
             type="button"
             className="icon-button mobile-close"

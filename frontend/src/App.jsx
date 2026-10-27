@@ -6,7 +6,9 @@ import {
   generateFocusedRoadmap,
   getProfile,
   getRoadmapProgress,
+  getRoadmapProgressHistory,
   getRecommendations,
+  getCareerIntelligence,
   getSavedJobMatches,
   getSkillGap,
   matchJobDescription,
@@ -14,11 +16,30 @@ import {
   saveRoadmapProgress,
   updateProfile,
   generatePortfolioProject,
+  savePortfolioProject,
+  getPortfolioProjects,
+  updatePortfolioProject,
   prepareInterview,
+  evaluateInterviewAnswer,
+  saveInterviewSession,
+  getInterviewSessions,
   getApplications,
   createApplication,
   updateApplication,
   deleteApplication,
+  optimizeResume,
+  getResumeVersions,
+  saveResumeVersion,
+  deleteResumeVersion,
+  getCopilotDashboard,
+  updateCopilotAction,
+  updateCopilotPreferences,
+  startCopilotWorkflow,
+  updateCopilotWorkflowStep,
+  createCopilotPlanTask,
+  updateCopilotPlanTask,
+  deleteCopilotPlanTask,
+  askCopilot,
 } from './services/api'
 import './App.css'
 
@@ -37,19 +58,120 @@ import { Settings } from './components/Settings'
 import { PortfolioProjects } from './components/PortfolioProjects'
 import { InterviewPrep } from './components/InterviewPrep'
 import { Applications } from './components/Applications'
+import { Copilot } from './components/Copilot'
 
 import { SAMPLE_RESUME_FILE, SAMPLE_RESUME_RESULT } from './constants/sampleResume'
 
 const DEFAULT_DEMO_SKILLS = SAMPLE_RESUME_RESULT.skills
 
 function App() {
-  const [page, setPage] = useState('resume')
+  const [page, setPage] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash.replace('#', '')
+      const match = NAVIGATION_ITEMS.find((item) => item.id === hash)
+      if (match) return hash
+      if (hash === 'settings') return 'settings'
+    }
+    return 'overview'
+  })
   const [dark, setDark] = useState(() => localStorage.getItem('skillbridge-theme') !== 'light')
   const [mobileNav, setMobileNav] = useState(false)
   const [apiStatus, setApiStatus] = useState('checking')
   const [profileName, setProfileName] = useState('Rohit Sharma')
   const [experienceLevel, setExperienceLevel] = useState('Aspiring Developer')
   const [profileSaveState, setProfileSaveState] = useState('idle')
+
+  const appShellRef = useRef(null)
+
+  // Global persistent mouse parallax engine for all routes
+  useEffect(() => {
+    const shell = appShellRef.current
+    if (!shell) return undefined
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const touchDevice = window.matchMedia('(hover: none)')
+    if (reducedMotion.matches || touchDevice.matches) return undefined
+
+    const target = { x: 0, y: 0 }
+    const current = { x: 0, y: 0 }
+    let frame
+    let running = false
+
+    const applyTransforms = () => {
+      const values = {
+        '--cursor-x': `${current.x}`,
+        '--cursor-y': `${current.y}`,
+        '--spotlight-x': `${((current.x + 1) / 2) * 100}%`,
+        '--spotlight-y': `${((current.y + 1) / 2) * 100}%`,
+        '--parallax-bg-x': `${current.x * -16}px`,
+        '--parallax-bg-y': `${current.y * -16}px`,
+        '--parallax-circuits-x': `${current.x * -26}px`,
+        '--parallax-circuits-y': `${current.y * -26}px`,
+        '--parallax-main-x': `${current.x * 28}px`,
+        '--parallax-main-y': `${current.y * 28}px`,
+        '--parallax-tilt-x': `${current.y * -7}deg`,
+        '--parallax-tilt-y': `${current.x * 7}deg`,
+        '--hero-tilt-x': `${current.y * -14}deg`,
+        '--hero-tilt-y': `${current.x * 14}deg`,
+        '--parallax-card1-x': `${current.x * 58}px`,
+        '--parallax-card1-y': `${current.y * 58}px`,
+        '--parallax-card2-x': `${current.x * -48}px`,
+        '--parallax-card2-y': `${current.y * -48}px`,
+        '--parallax-card-x': `${current.x * 8}px`,
+        '--parallax-card-y': `${current.y * 8}px`,
+      }
+      Object.entries(values).forEach(([prop, val]) => {
+        shell.style.setProperty(prop, val)
+        document.documentElement.style.setProperty(prop, val)
+      })
+    }
+
+    const render = () => {
+      current.x += (target.x - current.x) * 0.08
+      current.y += (target.y - current.y) * 0.08
+      applyTransforms()
+      const settling = Math.abs(target.x - current.x) > 0.001 || Math.abs(target.y - current.y) > 0.001
+      if (settling) {
+        frame = requestAnimationFrame(render)
+      } else {
+        current.x = target.x
+        current.y = target.y
+        applyTransforms()
+        running = false
+        frame = undefined
+      }
+    }
+
+    const startAnimation = () => {
+      if (!running) {
+        running = true
+        frame = requestAnimationFrame(render)
+      }
+    }
+
+    const handlePointerMove = (e) => {
+      const width = window.innerWidth || document.documentElement.clientWidth
+      const height = window.innerHeight || document.documentElement.clientHeight
+      target.x = Math.max(-1, Math.min(1, (e.clientX / width) * 2 - 1))
+      target.y = Math.max(-1, Math.min(1, (e.clientY / height) * 2 - 1))
+      startAnimation()
+    }
+
+    const handlePointerLeave = () => {
+      target.x = 0
+      target.y = 0
+      startAnimation()
+    }
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true })
+    document.addEventListener('pointerleave', handlePointerLeave)
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame)
+      window.removeEventListener('pointermove', handlePointerMove)
+      document.removeEventListener('pointerleave', handlePointerLeave)
+    }
+  }, [])
 
   // Profile and resume state (hydrated with demonstration developer resume by default)
   const [skills, setSkills] = useState(DEFAULT_DEMO_SKILLS)
@@ -74,17 +196,22 @@ function App() {
   const [focusSkills, setFocusSkills] = useState(null)
   const [completed, setCompleted] = useState(() => {
     try {
-      const saved = localStorage.getItem('skillbridge-completed-tasks')
+      const saved = localStorage.getItem('skillbridge-completed-tasks:Python Developer')
       return saved ? new Set(JSON.parse(saved)) : new Set()
     } catch {
       return new Set()
     }
   })
+  const [roadmapHistory, setRoadmapHistory] = useState([])
+  const [roadmapHistoryError, setRoadmapHistoryError] = useState('')
 
   // Role recommendations
   const [recommendations, setRecommendations] = useState([])
   const [recommendationLoading, setRecommendationLoading] = useState(true)
   const [recommendationError, setRecommendationError] = useState('')
+  const [careerIntelligence, setCareerIntelligence] = useState(null)
+  const [careerIntelligenceLoading, setCareerIntelligenceLoading] = useState(false)
+  const [careerIntelligenceError, setCareerIntelligenceError] = useState('')
 
   // Job matcher state
   const [jobMatch, setJobMatch] = useState(null)
@@ -99,15 +226,42 @@ function App() {
   const [applicationsLoading, setApplicationsLoading] = useState(true)
   const [applicationsError, setApplicationsError] = useState('')
 
+  // Resume optimization state
+  const [resumeOptimization, setResumeOptimization] = useState(null)
+  const [resumeVersions, setResumeVersions] = useState([])
+  const [resumeVersionsLoading, setResumeVersionsLoading] = useState(false)
+  const [resumeVersionsError, setResumeVersionsError] = useState('')
+
+  // Career Copilot state
+  const [copilotDashboard, setCopilotDashboard] = useState(null)
+  const [copilotLoading, setCopilotLoading] = useState(false)
+  const [copilotError, setCopilotError] = useState('')
+  const [copilotChatLoading, setCopilotChatLoading] = useState(false)
+  const [copilotChatError, setCopilotChatError] = useState('')
+
+  const refreshCopilot = useCallback(async () => {
+    setCopilotLoading(true)
+    setCopilotError('')
+    try {
+      setCopilotDashboard(await getCopilotDashboard())
+    } catch (error) {
+      setCopilotError(error.message)
+    } finally {
+      setCopilotLoading(false)
+    }
+  }, [])
+
   // Portfolio project state
   const [portfolioProject, setPortfolioProject] = useState(null)
-  const [portfolioLoading, setPortfolioLoading] = useState(false)
+  const [portfolioLoading, setPortfolioLoading] = useState(true)
   const [portfolioError, setPortfolioError] = useState('')
+  const [savedProjects, setSavedProjects] = useState([])
 
   // Interview preparation state
   const [interviewPlan, setInterviewPlan] = useState(null)
-  const [interviewLoading, setInterviewLoading] = useState(false)
+  const [interviewLoading, setInterviewLoading] = useState(true)
   const [interviewError, setInterviewError] = useState('')
+  const [interviewSessions, setInterviewSessions] = useState([])
 
   // Mentor state
   const [mentorAnswer, setMentorAnswer] = useState(null)
@@ -123,11 +277,36 @@ function App() {
   // Sync task completion in localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('skillbridge-completed-tasks', JSON.stringify([...completed]))
+      localStorage.setItem(`skillbridge-completed-tasks:${selectedRole}`, JSON.stringify([...completed]))
     } catch {
       // Storage error gracefully caught
     }
-  }, [completed])
+  }, [completed, selectedRole])
+
+  useEffect(() => {
+    if (page !== 'roadmap' && page !== 'overview') return undefined
+    let ignore = false
+    getRoadmapProgress(selectedRole)
+      .then((progress) => {
+        if (!ignore) setCompleted(new Set(progress.completed_days || []))
+      })
+      .catch((error) => {
+        if (!ignore) setRoadmapError(`Could not load saved roadmap progress: ${error.message}`)
+      })
+    getRoadmapProgressHistory(selectedRole)
+      .then((result) => {
+        if (!ignore) {
+          setRoadmapHistory(result.history || [])
+          setRoadmapHistoryError('')
+        }
+      })
+      .catch((error) => {
+        if (!ignore) setRoadmapHistoryError(`Could not load roadmap activity: ${error.message}`)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [page, selectedRole])
 
   // Initial health check
   useEffect(() => {
@@ -147,6 +326,14 @@ function App() {
       .then((result) => setSavedMatches(result.matches || []))
       .catch((error) => setSavedMatchesError(error.message))
       .finally(() => setSavedMatchesLoading(false))
+    getPortfolioProjects()
+      .then((result) => setSavedProjects(result.projects || []))
+      .catch((error) => setPortfolioError(error.message))
+      .finally(() => setPortfolioLoading(false))
+    getInterviewSessions()
+      .then((result) => setInterviewSessions(result.sessions || []))
+      .catch((error) => setInterviewError(error.message))
+      .finally(() => setInterviewLoading(false))
     getApplications()
       .then((result) => setApplications(result.applications || []))
       .catch((error) => setApplicationsError(error.message))
@@ -179,6 +366,61 @@ function App() {
       ignore = true
     }
   }, [skills])
+
+  useEffect(() => {
+    let ignore = false
+    setResumeVersionsLoading(true)
+    getResumeVersions(selectedRole)
+      .then((result) => {
+        if (!ignore) {
+          setResumeVersions(result.versions || [])
+          setResumeVersionsError('')
+        }
+      })
+      .catch((error) => {
+        if (!ignore) setResumeVersionsError(error.message)
+      })
+      .finally(() => {
+        if (!ignore) setResumeVersionsLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [selectedRole])
+
+  useEffect(() => {
+    if (!selectedRole || skills.length === 0) {
+      setCareerIntelligence(null)
+      setCareerIntelligenceLoading(false)
+      return undefined
+    }
+    let ignore = false
+    setCareerIntelligenceLoading(true)
+    getCareerIntelligence({
+      skills,
+      target_role: selectedRole,
+      daily_minutes: dailyMinutes,
+      completed_days: [...completed],
+      saved_matches: savedMatches,
+      saved_projects: savedProjects,
+      interview_sessions: interviewSessions,
+    })
+      .then((result) => {
+        if (!ignore) {
+          setCareerIntelligence(result)
+          setCareerIntelligenceError('')
+        }
+      })
+      .catch((error) => {
+        if (!ignore) setCareerIntelligenceError(error.message)
+      })
+      .finally(() => {
+        if (!ignore) setCareerIntelligenceLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
+  }, [completed, dailyMinutes, interviewSessions, savedMatches, savedProjects, selectedRole, skills])
 
   // Fetch skill gap whenever role or skills change
   useEffect(() => {
@@ -222,10 +464,31 @@ function App() {
 
   function navigate(id) {
     setPage(id)
+    const currentHash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : ''
+    if (id === 'copilot' && currentHash === id) refreshCopilot()
+    if (typeof window !== 'undefined') {
+      window.location.hash = id
+    }
     setMobileNav(false)
     if (id === 'gap') loadGap(selectedRole)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // Support direct route URL entry and browser back/forward navigation
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash.replace('#', '')
+      const match = NAVIGATION_ITEMS.find((item) => item.id === hash)
+      if (match) {
+        setPage(hash)
+        if (hash === 'copilot') refreshCopilot()
+      } else if (hash === 'settings') {
+        setPage('settings')
+      }
+    }
+    window.addEventListener('hashchange', handleHash)
+    return () => window.removeEventListener('hashchange', handleHash)
+  }, [refreshCopilot])
 
   function handleSelectFile(file) {
     setResumeError('')
@@ -241,6 +504,7 @@ function App() {
     }
     setResume(file)
     setResumeResult(null)
+    setResumeOptimization(null)
     setSkills([])
     setGap(null)
     setRoadmap(null)
@@ -396,6 +660,37 @@ function App() {
     }
   }
 
+  async function handleOptimizeResume(jobDescription, resumeSummary = resumeResult?.summary_text || '') {
+    if (!jobDescription || !jobDescription.trim()) {
+      throw new Error('Add a job description before optimizing the resume.')
+    }
+    const result = await optimizeResume({
+      target_role: selectedRole,
+      skills,
+      job_description: jobDescription,
+      resume_summary: resumeSummary,
+    })
+    setResumeOptimization(result)
+    return result
+  }
+
+  async function handleSaveResumeVersion(versionName, score, result) {
+    const saved = await saveResumeVersion({
+      target_role: selectedRole,
+      version_name: versionName,
+      summary: result?.changes_summary || 'Resume optimization draft',
+      score,
+      result,
+    })
+    setResumeVersions((current) => [saved, ...current])
+    return saved
+  }
+
+  async function handleDeleteResumeVersion(versionId) {
+    await deleteResumeVersion(versionId)
+    setResumeVersions((current) => current.filter((item) => item.id !== versionId))
+  }
+
   async function handleLoadSampleResume() {
     setResumeLoading(true)
     setResumeError('')
@@ -417,19 +712,19 @@ function App() {
     }
   }
 
-  async function handleCreateRoadmap(customFocusSkills = null) {
+  async function handleCreateRoadmap(customFocusSkills = null, targetRole = selectedRole) {
     setRoadmapLoading(true)
     setRoadmapError('')
     const activeFocus = customFocusSkills !== null ? customFocusSkills : focusSkills
     try {
       const generated = await generateFocusedRoadmap(
-        selectedRole,
+        targetRole,
         skills,
         dailyMinutes,
         activeFocus || undefined
       )
       setRoadmap(generated)
-      const progress = await getRoadmapProgress(selectedRole)
+      const progress = await getRoadmapProgress(targetRole)
       setCompleted(new Set(progress.completed_days || []))
     } catch (error) {
       setRoadmapError(error.message)
@@ -442,7 +737,7 @@ function App() {
     setSelectedRole(role)
     setFocusSkills(suggestedSkills)
     setPage('roadmap')
-    handleCreateRoadmap(suggestedSkills)
+    handleCreateRoadmap(suggestedSkills, role)
   }
 
   async function handleMatchJob(description, role) {
@@ -476,24 +771,62 @@ function App() {
     setPortfolioLoading(true)
     setPortfolioError('')
     try {
-      setPortfolioProject(await generatePortfolioProject(selectedRole, skills))
+      setPortfolioProject(await generatePortfolioProject(selectedRole, skills, {
+        focusSkills: gap?.prioritized_gaps?.map((item) => item.skill) || [],
+        jobRequirements: jobMatch?.detected_required_skills || [],
+        experienceLevel,
+        dailyMinutes,
+      }))
     } catch (error) {
       setPortfolioError(error.message)
     } finally {
       setPortfolioLoading(false)
     }
+
   }
 
-  async function handlePrepareInterview() {
+  async function handleSavePortfolioProject() {
+    const saved = await savePortfolioProject({
+      target_role: selectedRole,
+      skills,
+      focus_skills: gap?.prioritized_gaps?.map((item) => item.skill) || [],
+      job_requirements: jobMatch?.detected_required_skills || [],
+      experience_level: experienceLevel,
+      daily_minutes: dailyMinutes,
+    })
+    setSavedProjects((current) => [saved, ...current])
+  }
+
+  async function handleUpdatePortfolioProject(id, values) {
+    const updated = await updatePortfolioProject(id, values)
+    setSavedProjects((current) => current.map((item) => item.id === id ? updated : item))
+  }
+
+  async function handlePrepareInterview(options = {}) {
     setInterviewLoading(true)
     setInterviewError('')
     try {
-      setInterviewPlan(await prepareInterview(selectedRole, skills))
+      setInterviewPlan(await prepareInterview(selectedRole, skills, {
+        ...options,
+        focusSkills: gap?.prioritized_gaps?.map((item) => item.skill) || [],
+        jobRequirements: jobMatch?.detected_required_skills || [],
+      }))
     } catch (error) {
       setInterviewError(error.message)
     } finally {
       setInterviewLoading(false)
     }
+
+  }
+
+  async function handleEvaluateInterviewAnswer(question, answer, criteria) {
+    return evaluateInterviewAnswer(question, answer, criteria)
+  }
+
+  async function handleSaveInterviewSession(session) {
+    const saved = await saveInterviewSession(session)
+    setInterviewSessions((current) => [saved, ...current])
+    return saved
   }
 
   async function handleSaveProfile() {
@@ -528,6 +861,68 @@ function App() {
     setApplications((current) => current.filter((item) => item.id !== id))
   }
 
+  async function handleCopilotAction(actionId, status) {
+    try {
+      await updateCopilotAction(actionId, status)
+      await refreshCopilot()
+    } catch (error) {
+      setCopilotError(error.message)
+    }
+  }
+
+  async function handleCopilotPreferences(remindersEnabled) {
+    try {
+      await updateCopilotPreferences(remindersEnabled)
+      await refreshCopilot()
+    } catch (error) {
+      setCopilotError(error.message)
+    }
+  }
+
+  async function handleStartCopilotWorkflow(applicationId) {
+    await startCopilotWorkflow(applicationId)
+    await refreshCopilot()
+  }
+
+  async function handleCopilotWorkflowStep(applicationId, stepId, isComplete) {
+    try {
+      await updateCopilotWorkflowStep(applicationId, stepId, isComplete)
+      await refreshCopilot()
+    } catch (error) {
+      setCopilotError(error.message)
+    }
+  }
+
+  async function handleCreateCopilotPlanTask(task) {
+    const saved = await createCopilotPlanTask(task)
+    await refreshCopilot()
+    return saved
+  }
+
+  async function handleUpdateCopilotPlanTask(taskId, values) {
+    const updated = await updateCopilotPlanTask(taskId, values)
+    await refreshCopilot()
+    return updated
+  }
+
+  async function handleDeleteCopilotPlanTask(taskId) {
+    await deleteCopilotPlanTask(taskId)
+    await refreshCopilot()
+  }
+
+  async function handleAskCopilot(question, context = []) {
+    setCopilotChatLoading(true)
+    setCopilotChatError('')
+    try {
+      return await askCopilot(question, context)
+    } catch (error) {
+      setCopilotChatError(error.message)
+      return null
+    } finally {
+      setCopilotChatLoading(false)
+    }
+  }
+
   function handleAskMentorAboutJob(jobResult, role) {
     setSelectedRole(role)
     setPage('mentor')
@@ -535,14 +930,26 @@ function App() {
     handleAskMentor(prompt, role)
   }
 
-  function toggleTask(day) {
+  async function toggleTask(day) {
+    const previous = new Set(completed)
     const next = new Set(completed)
     if (next.has(day)) next.delete(day)
     else next.add(day)
-    setCompleted(() => {
-      return next
-    })
-    saveRoadmapProgress(selectedRole, [...next]).catch(() => {})
+    setCompleted(next)
+    try {
+      await saveRoadmapProgress(selectedRole, [...next])
+      setRoadmapError('')
+      try {
+        const history = await getRoadmapProgressHistory(selectedRole)
+        setRoadmapHistory(history.history || [])
+        setRoadmapHistoryError('')
+      } catch (historyError) {
+        setRoadmapHistoryError(`Could not refresh roadmap activity: ${historyError.message}`)
+      }
+    } catch (error) {
+      setCompleted(previous)
+      setRoadmapError(`Could not save roadmap progress: ${error.message}`)
+    }
   }
 
   function handleResetWorkspace() {
@@ -556,14 +963,28 @@ function App() {
     setMentorAnswer(null)
     setCompleted(new Set())
     try {
-      localStorage.removeItem('skillbridge-completed-tasks')
+      localStorage.removeItem(`skillbridge-completed-tasks:${selectedRole}`)
     } catch {
       // Ignored
     }
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" ref={appShellRef}>
+      {/* Global Interactive Ambient Parallax Backdrops across all routes */}
+      <div className="global-spotlight" aria-hidden="true" />
+      <div className="global-circuit-layer" aria-hidden="true">
+        <svg className="global-circuit-svg" viewBox="0 0 1440 900" fill="none" preserveAspectRatio="none">
+          <path className="global-circuit-path p-1" d="M0 120 H300 V350 H600" />
+          <path className="global-circuit-path p-2" d="M1440 180 H1100 V400 H850" />
+          <path className="global-circuit-path p-3" d="M200 900 V650 H450 V500" />
+          <path className="global-circuit-path p-1" d="M1250 900 V700 H950" />
+          <circle cx="300" cy="120" r="3" className="global-circuit-dot" />
+          <circle cx="600" cy="350" r="4" className="global-circuit-dot active" />
+          <circle cx="1100" cy="180" r="3" className="global-circuit-dot" />
+          <circle cx="850" cy="400" r="4" className="global-circuit-dot active" />
+        </svg>
+      </div>
       <Sidebar
         page={page}
         navigate={navigate}
@@ -582,6 +1003,7 @@ function App() {
           dark={dark}
           setDark={setDark}
           isRealResume={isRealResume}
+          resumeResult={resumeResult}
           name={profileName}
           experienceLevel={experienceLevel}
           setProfileName={setProfileName}
@@ -610,6 +1032,38 @@ function App() {
               applicationsError={applicationsError}
               recommendationsLoading={recommendationLoading}
               recommendationsError={recommendationError}
+              interviewSessions={interviewSessions}
+              savedProjects={savedProjects}
+              portfolioLoading={portfolioLoading}
+              interviewLoading={interviewLoading}
+              roadmapHistory={roadmapHistory}
+              roadmapHistoryError={roadmapHistoryError}
+              portfolioError={portfolioError}
+              interviewError={interviewError}
+              careerIntelligence={careerIntelligence}
+              careerIntelligenceLoading={careerIntelligenceLoading}
+              careerIntelligenceError={careerIntelligenceError}
+            />
+          )}
+
+          {page === 'copilot' && (
+            <Copilot
+              dashboard={copilotDashboard}
+              loading={copilotLoading}
+              error={copilotError}
+              refresh={refreshCopilot}
+              updateAction={handleCopilotAction}
+              updatePreferences={handleCopilotPreferences}
+              startWorkflow={handleStartCopilotWorkflow}
+              updateWorkflowStep={handleCopilotWorkflowStep}
+              createPlanTask={handleCreateCopilotPlanTask}
+              updatePlanTask={handleUpdateCopilotPlanTask}
+              deletePlanTask={handleDeleteCopilotPlanTask}
+              applications={applications}
+              navigate={navigate}
+              ask={handleAskCopilot}
+              chatLoading={copilotChatLoading}
+              chatError={copilotChatError}
             />
           )}
 
@@ -620,6 +1074,7 @@ function App() {
               removeResume={() => {
                 setResume(null)
                 setResumeResult(null)
+                setResumeOptimization(null)
                 setSkills([])
                 setGap(null)
                 setRoadmap(null)
@@ -632,6 +1087,13 @@ function App() {
               result={resumeResult}
               error={resumeError}
               analyze={() => handleAnalyzeResume()}
+              optimizeResume={handleOptimizeResume}
+              saveResumeVersion={handleSaveResumeVersion}
+              deleteResumeVersion={handleDeleteResumeVersion}
+              resumeOptimization={resumeOptimization}
+              resumeVersions={resumeVersions}
+              resumeVersionsLoading={resumeVersionsLoading}
+              resumeVersionsError={resumeVersionsError}
               loadSampleResume={handleLoadSampleResume}
               skills={skills}
               setSkills={setSkills}
@@ -642,7 +1104,6 @@ function App() {
               gapError={gapError}
               refreshGap={loadGap}
               navigate={navigate}
-              jobMatch={jobMatch}
               jobMatchLoading={jobMatchLoading}
               jobMatchError={jobMatchError}
               matchJob={handleMatchJob}
@@ -670,8 +1131,12 @@ function App() {
               loading={gapLoading}
               error={gapError}
               refresh={loadGap}
-              roadmap={() => handleCreateRoadmap()}
+              roadmap={(prioritizedSkills) => handleBuildRoadmapFromGaps(prioritizedSkills, selectedRole)}
               navigate={navigate}
+              resumeSkills={resumeResult?.skills || []}
+              verifiedSkills={[]}
+              isRealResume={isRealResume}
+              jobMatch={jobMatch}
             />
           )}
 
@@ -685,12 +1150,30 @@ function App() {
               generate={() => handleCreateRoadmap()}
               completed={completed}
               toggleTask={toggleTask}
-              resetProgress={() => {
+              resetProgress={async () => {
+                const previous = new Set(completed)
                 setCompleted(new Set())
-                saveRoadmapProgress(selectedRole, []).catch(() => {})
+                try {
+                  await saveRoadmapProgress(selectedRole, [])
+                  setRoadmapError('')
+                  try {
+                    const history = await getRoadmapProgressHistory(selectedRole)
+                    setRoadmapHistory(history.history || [])
+                    setRoadmapHistoryError('')
+                  } catch (historyError) {
+                    setRoadmapHistoryError(`Could not refresh roadmap activity: ${historyError.message}`)
+                  }
+                } catch (error) {
+                  setCompleted(previous)
+                  setRoadmapError(`Could not reset roadmap progress: ${error.message}`)
+                }
               }}
               role={selectedRole}
-              setRole={setSelectedRole}
+              setRole={(nextRole) => {
+                setSelectedRole(nextRole)
+                setRoadmap(null)
+                setCompleted(new Set())
+              }}
               focusSkills={focusSkills}
               clearFocusSkills={() => setFocusSkills(null)}
             />
@@ -705,6 +1188,10 @@ function App() {
               loading={portfolioLoading}
               error={portfolioError}
               generate={handleGeneratePortfolioProject}
+              saveProject={handleSavePortfolioProject}
+              savedProjects={savedProjects}
+              updateProject={handleUpdatePortfolioProject}
+              focusSkills={gap?.prioritized_gaps?.map((item) => item.skill) || []}
             />
           )}
 
@@ -716,6 +1203,11 @@ function App() {
               loading={interviewLoading}
               error={interviewError}
               prepare={handlePrepareInterview}
+              evaluateAnswer={handleEvaluateInterviewAnswer}
+              saveSession={handleSaveInterviewSession}
+              sessions={interviewSessions}
+              jobMatch={jobMatch}
+              focusSkills={gap?.prioritized_gaps?.map((item) => item.skill) || []}
             />
           )}
 
@@ -730,7 +1222,8 @@ function App() {
               match={handleMatchJob}
               buildRoadmapFromGaps={handleBuildRoadmapFromGaps}
               askMentorAboutJob={handleAskMentorAboutJob}
-              saveMatch={(title, description) => saveJobMatch(title, '', description, jobMatch).then((saved) => setSavedMatches((current) => [saved, ...current]))}
+              saveMatch={(title, company, description) => saveJobMatch(title, company, description, jobMatch).then((saved) => setSavedMatches((current) => [saved, ...current]))}
+              reviewGaps={() => navigate('gap')}
             />
           )}
 

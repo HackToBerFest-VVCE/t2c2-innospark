@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Icon, Loading, PageIntro } from './common/Icons'
 import { CATALOG_ROLES } from '../constants/roles'
 
@@ -11,11 +12,18 @@ export function SkillGapPage({
   refresh,
   roadmap,
   navigate,
+  resumeSkills = [],
+  verifiedSkills = [],
+  isRealResume = false,
+  jobMatch = null,
 }) {
+  const [expandedSkill, setExpandedSkill] = useState(null)
   const coverage = gap ? Math.round(gap.skill_coverage_percentage) : 0
   const missingCount = gap?.missing_required_skills?.length || 0
   const matchedCount = gap?.matched_required_skills?.length || 0
   const optionalCount = gap?.matched_optional_skills?.length || 0
+  const prioritizedGaps = gap?.prioritized_gaps || []
+  const prioritizedSkillNames = prioritizedGaps.map((item) => item.skill)
 
   return (
     <>
@@ -28,7 +36,7 @@ export function SkillGapPage({
             <button
               type="button"
               className="button primary"
-              onClick={roadmap}
+              onClick={() => roadmap(prioritizedSkillNames)}
               disabled={!gap || loading}
             >
               <Icon name="map" size={16} /> Build 30-Day Learning Plan
@@ -60,6 +68,22 @@ export function SkillGapPage({
           <i aria-hidden="true"></i> Deterministic Industry Catalog
         </span>
       </div>
+      <p className="skill-source-note">
+        Profile skills are matched from {isRealResume ? 'your uploaded resume' : 'the current profile/demo data'}.
+        Assessment verification is shown separately when available.
+      </p>
+      {jobMatch?.missing_skills?.length > 0 && (
+        <div className="job-gap-context card" role="status">
+          <div>
+            <span className="eyebrow">JOB POSTING CONTEXT</span>
+            <strong>{jobMatch.missing_skills.length} requirements from your latest comparison need attention.</strong>
+            <p>{jobMatch.missing_skills.join(', ')}</p>
+          </div>
+          <button type="button" className="button secondary" onClick={() => roadmap(jobMatch.suggested_learning_skills)}>
+            <Icon name="map" size={14} /> Add to roadmap
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="inline-error" role="alert">
@@ -138,13 +162,49 @@ export function SkillGapPage({
               icon="check"
               tone="good"
               empty="Upload a resume to populate extracted skills."
+              renderSkill={(skill) => (
+                <span className="skill-source-label">
+                  {verifiedSkills.some((item) => item.toLowerCase() === skill.toLowerCase())
+                    ? 'Assessment verified'
+                    : isRealResume && resumeSkills.some((item) => item.toLowerCase() === skill.toLowerCase())
+                      ? 'Resume detected'
+                      : 'Profile skill'}
+                </span>
+              )}
             />
             <SkillList
-              title="Priority Core Gaps to Learn"
-              skills={gap.missing_required_skills || []}
+              title="Prioritized Gaps to Learn"
+              skills={prioritizedGaps}
               icon="target"
               tone="missing"
               empty="No core gaps! You meet all baseline role requirements."
+              renderSkill={(item) => (
+                <div className="priority-gap-content">
+                  <div className="priority-gap-heading">
+                    <strong>{item.skill}</strong>
+                    <span className={`priority-label ${item.priority.toLowerCase()}`}>{item.priority} priority</span>
+                  </div>
+                  <span className="priority-gap-why">{item.why_required}</span>
+                  <span className="priority-gap-meta">
+                    {item.estimated_hours} hours
+                    {item.prerequisites.length ? ` · Prerequisite: ${item.prerequisites.join(', ')}` : ' · No prerequisites listed'}
+                  </span>
+                  {expandedSkill === item.skill && (
+                    <div className="priority-gap-details">
+                      <span><b>Exercise:</b> {item.exercise}</span>
+                      <span><b>Resources:</b> {item.resources.join(', ') || 'Use the practical exercise above.'}</span>
+                    </div>
+                  )}
+                  <div className="priority-gap-actions">
+                    <button type="button" className="text-button" onClick={() => roadmap([item.skill])}>
+                      Start Learning <Icon name="arrow" size={12} />
+                    </button>
+                    <button type="button" className="ghost-button" onClick={() => setExpandedSkill(expandedSkill === item.skill ? null : item.skill)}>
+                      {expandedSkill === item.skill ? 'Hide details' : 'View details'}
+                    </button>
+                  </div>
+                </div>
+              )}
             />
             <SkillList
               title="Optional Edge Skills Matched"
@@ -160,7 +220,7 @@ export function SkillGapPage({
   )
 }
 
-function SkillList({ title, skills, icon, tone, empty }) {
+function SkillList({ title, skills, icon, tone, empty, renderSkill }) {
   return (
     <section className="card skill-list-card" aria-label={title}>
       <div className="card-heading">
@@ -169,11 +229,11 @@ function SkillList({ title, skills, icon, tone, empty }) {
       </div>
       {skills.length > 0 ? (
         <div className="large-chip-list">
-          {skills.map((skill) => (
-            <span className={`large-chip ${tone}`} key={skill}>
+          {skills.map((skill, index) => (
+            <div className={`large-chip ${tone} ${renderSkill ? 'large-chip-rich' : ''}`} key={`${title}-${renderSkill ? skill.skill : skill}-${index}`}>
               <Icon name={icon} size={14} />
-              {skill}
-            </span>
+              {renderSkill ? renderSkill(skill) : skill}
+            </div>
           ))}
         </div>
       ) : (

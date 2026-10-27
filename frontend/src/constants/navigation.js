@@ -1,5 +1,6 @@
 export const NAVIGATION_ITEMS = [
   { id: 'overview', label: 'Career Dashboard', icon: 'grid' },
+  { id: 'copilot', label: 'Career Copilot', icon: 'sparkle', badge: 'New' },
   { id: 'resume', label: 'Resume Analyzer', icon: 'file' },
   { id: 'recommendations', label: 'Job Recommendations', icon: 'briefcase', badge: 'Live' },
   { id: 'gap', label: 'Skill Gap', icon: 'target' },

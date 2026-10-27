@@ -36,11 +36,36 @@ def test_roadmap_progress_is_persisted() -> None:
     }
 
 
+def test_roadmap_progress_history_records_persisted_snapshots() -> None:
+    client.put(
+        "/api/roadmap/progress",
+        json={"target_role": "Python Developer", "completed_days": [1]},
+    )
+    client.put(
+        "/api/roadmap/progress",
+        json={"target_role": "Python Developer", "completed_days": [1, 2]},
+    )
+
+    response = client.get("/api/roadmap/progress/Python%20Developer/history")
+
+    assert response.status_code == 200
+    history = response.json()["history"]
+    assert len(history) >= 2
+    assert history[-1]["completed_days"] == [1, 2]
+    assert history[-1]["created_at"]
+
+
 def test_invalid_roadmap_progress_is_rejected() -> None:
     response = client.put(
         "/api/roadmap/progress",
         json={"target_role": "Python Developer", "completed_days": [31]},
     )
+
+    assert response.status_code == 400
+
+
+def test_unknown_roadmap_role_is_rejected() -> None:
+    response = client.get("/api/roadmap/progress/Unknown%20Role")
 
     assert response.status_code == 400
 

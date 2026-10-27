@@ -10,6 +10,9 @@ export function PortfolioProjects({
   loading,
   error,
   generate,
+  saveProject,
+  savedProjects = [],
+  updateProject,
 }) {
   const [copied, setCopied] = useState(false)
 
@@ -43,6 +46,7 @@ export function PortfolioProjects({
           <button type="button" className="button primary" onClick={generate} disabled={loading}>
             {loading ? <><span className="spinner" aria-hidden="true"></span> Designing Project...</> : <><Icon name="spark" size={16} /> Generate Project</>}
           </button>
+          {project && <button type="button" className="button secondary" onClick={saveProject}>Save Project Plan</button>}
         </div>
         {error && <div className="inline-error" role="alert"><Icon name="close" size={13} /> {error}</div>}
       </section>
@@ -63,6 +67,11 @@ export function PortfolioProjects({
             <div className="large-chip-list">
               {project.priority_skills.map((item) => <span className="large-chip missing" key={item}><Icon name="target" size={14} />{item}</span>)}
             </div>
+            <h3>Learning objectives</h3>
+            <ul className="portfolio-checklist">
+              {(project.learning_objectives || []).map((objective) => <li key={objective}>{objective}</li>)}
+            </ul>
+            <div className="small-muted">Estimated effort: {project.estimated_hours} hours · {project.difficulty}</div>
           </section>
 
           <section className="card">
@@ -71,8 +80,11 @@ export function PortfolioProjects({
               {project.milestones.map((milestone) => (
                 <article key={milestone.phase}>
                   <span className="eyebrow">{milestone.phase}</span>
+                  <strong>{milestone.title || milestone.phase}</strong>
                   <p>{milestone.deliverable}</p>
                   <div className="small-muted">{milestone.skills.join(' · ')}</div>
+                  <div className="small-muted">{milestone.estimated_hours}h · Prerequisites: {milestone.prerequisites.join(', ') || 'None'}</div>
+                  <div className="small-muted">{milestone.completion_criteria}</div>
                 </article>
               ))}
             </div>
@@ -98,6 +110,53 @@ export function PortfolioProjects({
           </section>
         </div>
       )}
+      <section className="card portfolio-saved-projects">
+        <div className="card-heading"><h2>Saved project plans</h2><span className="count-badge good">{savedProjects.length}</span></div>
+        {savedProjects.length === 0 ? <p className="small-muted">Save a recommendation to track milestones and add verified project evidence later.</p> : savedProjects.map((saved) => (
+          <article className="saved-project-row" key={saved.id}>
+            <div><strong>{saved.title}</strong><span>{saved.target_role} · {saved.status}</span></div>
+            <select value={saved.status} onChange={(event) => updateProject(saved.id, { status: event.target.value })}>
+              <option value="planned">Planned</option><option value="in_progress">In Progress</option><option value="completed">Completed</option>
+            </select>
+            <label className="project-url-field">
+              GitHub URL
+              <input
+                type="url"
+                placeholder="https://github.com/..."
+                value={saved.github_url || ''}
+                onChange={(event) => updateProject(saved.id, { github_url: event.target.value })}
+              />
+            </label>
+            <label className="project-url-field">
+              Demo URL
+              <input
+                type="url"
+                placeholder="https://..."
+                value={saved.demo_url || ''}
+                onChange={(event) => updateProject(saved.id, { demo_url: event.target.value })}
+              />
+            </label>
+            <div className="project-milestone-progress">
+              <span>{(saved.completed_milestones || []).length}/{saved.milestones?.length || 0} milestones</span>
+              {saved.milestones?.map((milestone, index) => (
+                <label key={milestone.phase}>
+                  <input
+                    type="checkbox"
+                    checked={(saved.completed_milestones || []).includes(index)}
+                    onChange={() => {
+                      const completed = new Set(saved.completed_milestones || [])
+                      if (completed.has(index)) completed.delete(index)
+                      else completed.add(index)
+                      updateProject(saved.id, { completed_milestones: [...completed] })
+                    }}
+                  />
+                  {milestone.phase}
+                </label>
+              ))}
+            </div>
+          </article>
+        ))}
+      </section>
     </>
   )
 }

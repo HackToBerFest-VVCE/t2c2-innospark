@@ -3,28 +3,57 @@ import re
 import fitz
 from fastapi import FastAPI, File, HTTPException, UploadFile, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from backend.app.copilot import (
+    ACTION_STATUSES,
+    answer_copilot_question,
+    build_copilot_dashboard,
+    make_preparation_workflow,
+)
 from backend.app.roadmap import generate_roadmap
 from backend.app.job_matcher import match_job_description
 from backend.app.mentor import answer_mentor_question
 from backend.app.profile_store import (
     APPLICATION_STATUSES,
+    PROJECT_STATUSES,
     create_application,
     delete_application,
     get_profile,
     get_roadmap_progress,
+    list_roadmap_progress_history,
     list_applications,
     list_job_matches,
     save_job_match,
     save_roadmap_progress,
     update_application,
     update_profile,
+    list_interview_sessions,
+    save_interview_session,
+    get_portfolio_project,
+    list_portfolio_projects,
+    save_portfolio_project,
+    update_portfolio_project,
+    save_resume_version,
+    list_resume_versions,
+    delete_resume_version,
+    get_copilot_preferences,
+    list_copilot_action_states,
+    list_copilot_plan_tasks,
+    list_copilot_workflows,
+    create_copilot_plan_task,
+    delete_copilot_plan_task,
+    save_copilot_workflow,
+    update_copilot_action_state,
+    update_copilot_plan_task,
+    update_copilot_preferences,
+    update_copilot_workflow_step,
 )
 from backend.app.portfolio_projects import generate_portfolio_project
-from backend.app.interview_prep import generate_interview_plan
+from backend.app.interview_prep import evaluate_interview_answer, generate_interview_plan
+from backend.app.intelligence import build_intelligence
 from backend.app.recommendations import recommend_roles
-from backend.app.skill_gap import analyze_skill_gap
+from backend.app.skill_gap import JOB_ROLE_SKILL_CATALOG, analyze_skill_gap
 
 app = FastAPI(title="SkillBridge AI")
 app.add_middleware(
@@ -81,6 +110,8 @@ class JobMatchRequest(BaseModel):
     job_description: str
     skills: list[str]
     target_role: str | None = None
+    job_title: str = ""
+    company: str = ""
 
 
 class MentorRequest(BaseModel):
@@ -122,11 +153,42 @@ class ResumeReportRequest(BaseModel):
 class PortfolioProjectRequest(BaseModel):
     target_role: str
     skills: list[str]
+    focus_skills: list[str] = []
+    job_requirements: list[str] = []
+    experience_level: str = "exploring"
+    daily_minutes: int = 60
+
+
+class PortfolioProjectUpdateRequest(BaseModel):
+    status: str | None = None
+    github_url: str | None = None
+    demo_url: str | None = None
+    notes: str | None = None
+    completed_milestones: list[int] | None = None
 
 
 class InterviewPrepRequest(BaseModel):
     target_role: str
     skills: list[str]
+    question_count: int | None = None
+    difficulty: str = "Intermediate"
+    focus_skills: list[str] = []
+    job_requirements: list[str] = []
+
+
+class InterviewEvaluationRequest(BaseModel):
+    question: str
+    answer: str
+    evaluation_criteria: list[str] = []
+
+
+class InterviewSessionRequest(BaseModel):
+    target_role: str
+    difficulty: str
+    question_count: int
+    score: float
+    answers: list[dict]
+    recurring_gaps: list[str] = []
 
 
 class ApplicationRequest(BaseModel):
@@ -140,17 +202,301 @@ class ApplicationRequest(BaseModel):
     notes: str = ""
 
 
+class ResumeOptimizationRequest(BaseModel):
+    target_role: str = "Python Developer"
+    skills: list[str] = []
+    job_description: str = ""
+    resume_summary: str = ""
+
+
+class ResumeVersionRequest(BaseModel):
+    target_role: str = "Python Developer"
+    version_name: str = ""
+    summary: str = ""
+    score: int = 0
+    result: dict = {}
+
+
+class IntelligenceRequest(BaseModel):
+    skills: list[str]
+    target_role: str
+    daily_minutes: int = 60
+    completed_days: list[int] = []
+    saved_matches: list[dict] = []
+    saved_projects: list[dict] = []
+    interview_sessions: list[dict] = []
+
+
+class CopilotActionStatusRequest(BaseModel):
+    status: str
+
+
+class CopilotPreferenceRequest(BaseModel):
+    reminders_enabled: bool
+
+
+class CopilotWorkflowStepRequest(BaseModel):
+    step_id: str
+    completed: bool
+
+
+class CopilotChatRequest(BaseModel):
+    question: str
+    context: list[dict[str, str]] = Field(default_factory=list)
+
+
+class CopilotPlanTaskCreateRequest(BaseModel):
+    title: str
+    period: str
+    description: str = ""
+    estimated_minutes: int | None = None
+    destination: str = "roadmap"
+
+
+class CopilotPlanTaskUpdateRequest(BaseModel):
+    title: str | None = None
+    period: str | None = None
+    description: str | None = None
+    estimated_minutes: int | None = None
+    destination: str | None = None
+    completed: bool | None = None
+
+
 @app.get("/api/health")
 def health_check() -> dict[str, str]:
     return {"status": "healthy", "project": "SkillBridge AI"}
 
 
+@app.post("/api/intelligence/overview")
+def intelligence_overview(request: IntelligenceRequest) -> dict:
+    if request.target_role not in JOB_ROLE_SKILL_CATALOG:
+        raise HTTPException(status_code=400, detail=f"Unknown target role: {request.target_role}.")
+    if not 15 <= request.daily_minutes <= 240:
+        raise HTTPException(status_code=400, detail="daily_minutes must be between 15 and 240.")
+    if any(day < 1 or day > 30 for day in request.completed_days):
+        raise HTTPException(status_code=400, detail="completed_days must contain values from 1 through 30.")
+    return build_intelligence(
+        request.skills,
+        request.target_role,
+        request.daily_minutes,
+        request.completed_days,
+        request.saved_matches,
+        request.saved_projects,
+        request.interview_sessions,
+    )
+
+
+def _copilot_dashboard_data() -> dict:
+    profile = get_profile()
+    applications = list_applications()
+    profile_role = str(profile.get("target_role") or "Python Developer")
+    saved_workflows = {
+        workflow["application_id"]: workflow
+        for workflow in list_copilot_workflows()
+        if any(app["id"] == workflow["application_id"] for app in applications)
+    }
+    workflows = []
+    for application in applications:
+        workflow = saved_workflows.get(application["id"])
+        if workflow:
+            workflows.append({
+                **workflow,
+                "job_title": application["job_title"],
+                "company": application["company"],
+            })
+    preferences = get_copilot_preferences()
+    return build_copilot_dashboard(
+        profile,
+        applications,
+        get_roadmap_progress(profile_role),
+        list_job_matches(),
+        list_portfolio_projects(),
+        list_interview_sessions(),
+        list_copilot_action_states(),
+        preferences["reminders_enabled"],
+        workflows,
+        custom_tasks=list_copilot_plan_tasks(),
+    )
+
+
+@app.get("/api/copilot/dashboard")
+def copilot_dashboard() -> dict:
+    return _copilot_dashboard_data()
+
+
+@app.put("/api/copilot/actions/{action_id:path}")
+def copilot_action_update(action_id: str, request: CopilotActionStatusRequest) -> dict:
+    if request.status not in ACTION_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"status must be one of: {', '.join(ACTION_STATUSES)}.",
+        )
+    dashboard = _copilot_dashboard_data()
+    if not any(action["id"] == action_id for action in dashboard["actions"]):
+        raise HTTPException(status_code=404, detail="Copilot action not found.")
+    return update_copilot_action_state(action_id, request.status)
+
+
+@app.put("/api/copilot/preferences")
+def copilot_preferences_update(request: CopilotPreferenceRequest) -> dict[str, bool]:
+    return update_copilot_preferences(request.reminders_enabled)
+
+
+COPILOT_DESTINATIONS = {
+    "copilot",
+    "gap",
+    "roadmap",
+    "portfolio",
+    "interview",
+    "applications",
+    "matcher",
+    "resume",
+    "mentor",
+}
+
+
+def _validate_copilot_plan_task(values: dict) -> dict:
+    if "title" in values:
+        title = str(values["title"]).strip()
+        if not title or len(title) > 160:
+            raise HTTPException(status_code=400, detail="title must contain 1 to 160 characters.")
+        values["title"] = title
+    if "description" in values and len(values["description"]) > 500:
+        raise HTTPException(status_code=400, detail="description must be 500 characters or fewer.")
+    if values.get("period") not in (None, "daily", "weekly"):
+        raise HTTPException(status_code=400, detail="period must be daily or weekly.")
+    if "estimated_minutes" in values and values["estimated_minutes"] is not None:
+        if not 5 <= values["estimated_minutes"] <= 240:
+            raise HTTPException(status_code=400, detail="estimated_minutes must be between 5 and 240.")
+    if values.get("destination") not in (None, *COPILOT_DESTINATIONS):
+        raise HTTPException(status_code=400, detail="destination is not an allowed application page.")
+    return values
+
+
+@app.get("/api/copilot/plan-tasks")
+def copilot_plan_tasks_list() -> dict[str, list[dict]]:
+    return {"tasks": list_copilot_plan_tasks()}
+
+
+@app.post("/api/copilot/plan-tasks")
+def copilot_plan_task_create(request: CopilotPlanTaskCreateRequest) -> dict:
+    values = _validate_copilot_plan_task(request.model_dump())
+    return create_copilot_plan_task(values)
+
+
+@app.put("/api/copilot/plan-tasks/{task_id}")
+def copilot_plan_task_update(task_id: int, request: CopilotPlanTaskUpdateRequest) -> dict:
+    values = _validate_copilot_plan_task(
+        request.model_dump(exclude_unset=True, exclude_none=True)
+    )
+    updated = update_copilot_plan_task(task_id, values)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Copilot plan task not found.")
+    return updated
+
+
+@app.delete("/api/copilot/plan-tasks/{task_id}")
+def copilot_plan_task_delete(task_id: int) -> dict[str, bool]:
+    if not delete_copilot_plan_task(task_id):
+        raise HTTPException(status_code=404, detail="Copilot plan task not found.")
+    return {"deleted": True}
+
+
+@app.post("/api/copilot/chat")
+def copilot_chat(request: CopilotChatRequest) -> dict:
+    try:
+        return answer_copilot_question(
+            request.question,
+            _copilot_dashboard_data(),
+            request.context,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/copilot/workflows/{application_id}")
+def copilot_workflow_start(application_id: int) -> dict:
+    application = next(
+        (item for item in list_applications() if item["id"] == application_id),
+        None,
+    )
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found.")
+    existing = next(
+        (
+            workflow
+            for workflow in list_copilot_workflows()
+            if workflow["application_id"] == application_id
+        ),
+        None,
+    )
+    workflow = existing or save_copilot_workflow(
+        application_id,
+        make_preparation_workflow(application)["steps"],
+    )
+    return {
+        **workflow,
+        "job_title": application["job_title"],
+        "company": application["company"],
+    }
+
+
+@app.put("/api/copilot/workflows/{application_id}")
+def copilot_workflow_step_update(
+    application_id: int,
+    request: CopilotWorkflowStepRequest,
+) -> dict:
+    if not any(item["id"] == application_id for item in list_applications()):
+        raise HTTPException(status_code=404, detail="Application not found.")
+    updated = update_copilot_workflow_step(
+        application_id,
+        request.step_id,
+        request.completed,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Workflow or step not found.")
+    return updated
+
+
 @app.post("/api/skills/gap")
-def skill_gap_analysis(request: SkillGapRequest) -> dict[str, str | list[str] | float]:
+def skill_gap_analysis(request: SkillGapRequest) -> dict[str, object]:
     try:
         return analyze_skill_gap(request.skills, request.target_role)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/interview/evaluate")
+def interview_answer_evaluation(request: InterviewEvaluationRequest) -> dict[str, object]:
+    try:
+        return evaluate_interview_answer(
+            request.question,
+            request.answer,
+            request.evaluation_criteria,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/interview/sessions")
+def interview_sessions() -> dict[str, list[dict]]:
+    return {"sessions": list_interview_sessions()}
+
+
+@app.post("/api/interview/sessions")
+def interview_session_create(request: InterviewSessionRequest) -> dict:
+    if request.question_count < 1 or request.question_count > 12:
+        raise HTTPException(status_code=400, detail="question_count must be between 1 and 12.")
+    if not 0 <= request.score <= 100:
+        raise HTTPException(status_code=400, detail="score must be between 0 and 100.")
+    return save_interview_session(
+        request.target_role,
+        request.difficulty,
+        request.question_count,
+        request.score,
+        request.answers,
+        request.recurring_gaps,
+    )
 
 
 @app.post("/api/roadmap/generate")
@@ -177,15 +523,60 @@ def role_recommendations(request: RecommendationsRequest) -> dict[str, list[dict
 @app.post("/api/portfolio/projects")
 def portfolio_project_generation(request: PortfolioProjectRequest) -> dict:
     try:
-        return generate_portfolio_project(request.skills, request.target_role)
+        return generate_portfolio_project(
+            request.skills,
+            request.target_role,
+            request.focus_skills,
+            request.job_requirements,
+            request.experience_level,
+            request.daily_minutes,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/portfolio/projects")
+def portfolio_projects_list() -> dict[str, list[dict]]:
+    return {"projects": list_portfolio_projects()}
+
+
+@app.post("/api/portfolio/projects/save")
+def portfolio_project_save(request: PortfolioProjectRequest) -> dict:
+    try:
+        project = generate_portfolio_project(
+            request.skills, request.target_role, request.focus_skills,
+            request.job_requirements, request.experience_level, request.daily_minutes,
+        )
+        return save_portfolio_project(project)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/portfolio/projects/{project_id}")
+def portfolio_project_update(project_id: int, request: PortfolioProjectUpdateRequest) -> dict:
+    values = request.model_dump(exclude_none=True)
+    if values.get("status") not in (*PROJECT_STATUSES, None):
+        raise HTTPException(status_code=400, detail="Invalid project status.")
+    for field in ("github_url", "demo_url"):
+        if field in values and values[field] and not re.match(r"^https?://", values[field]):
+            raise HTTPException(status_code=400, detail=f"{field} must be a valid http(s) URL.")
+    updated = update_portfolio_project(project_id, values)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Portfolio project not found.")
+    return updated
 
 
 @app.post("/api/interview/prepare")
 def interview_preparation(request: InterviewPrepRequest) -> dict:
     try:
-        return generate_interview_plan(request.skills, request.target_role)
+        return generate_interview_plan(
+            request.skills,
+            request.target_role,
+            request.question_count,
+            request.difficulty,
+            request.focus_skills,
+            request.job_requirements,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -239,6 +630,93 @@ def application_delete(application_id: int) -> dict[str, bool]:
     return {"deleted": True}
 
 
+@app.post("/api/resume/optimize")
+def resume_optimization(request: ResumeOptimizationRequest) -> dict[str, object]:
+    if not request.job_description.strip():
+        raise HTTPException(status_code=400, detail="job_description is required.")
+    tokens = []
+    normalized_skills = {re.sub(r"[^a-z0-9]+", " ", skill.lower()).strip() for skill in request.skills if skill}
+    for token in re.findall(r"[A-Za-z][A-Za-z0-9+/.-]*", request.job_description.lower()):
+        cleaned = re.sub(r"[^a-z0-9]+", " ", token).strip()
+        if cleaned and len(cleaned) > 2 and cleaned not in {"the", "and", "for", "with", "your", "that", "into", "from", "this", "have", "will", "must", "role"}:
+            tokens.append(cleaned)
+    seen: set[str] = set()
+    matched_keywords: list[str] = []
+    missing_keywords: list[str] = []
+    for token in tokens:
+        if token in seen:
+            continue
+        seen.add(token)
+        if token in normalized_skills or any(token in skill for skill in normalized_skills):
+            matched_keywords.append(token)
+        else:
+            missing_keywords.append(token)
+    score = 100 if not tokens else round(min(100, max(0, (len(matched_keywords) / len(tokens)) * 100)))
+    summary = request.resume_summary.strip() or "Experienced professional with strong technical foundations and a clear interest in this role."
+    suggestions = [
+        {
+            "section": "Professional Summary",
+            "reason": "Align the opening summary with the role's strongest keywords and evidence.",
+            "before": summary[:120],
+            "after": f"{summary[:80]} Results-oriented {request.target_role} candidate with experience in {', '.join(matched_keywords[:3] or ['problem solving', 'collaboration'])}.",
+        },
+        {
+            "section": "Skills Section",
+            "reason": "Add skills directly supported by the target role and the job description.",
+            "before": "Current skills are missing direct role keywords.",
+            "after": f"Core skills: {', '.join((request.skills or ['Python', 'SQL'])[:6])}; role-relevant keywords: {', '.join(matched_keywords[:4]) or 'problem solving'}.",
+        },
+        {
+            "section": "Experience",
+            "reason": "Describe impact using measurable results and role-aligned responsibilities.",
+            "before": "Previous work may not clearly tie to the target role.",
+            "after": "Led projects across modern tooling and collaborated with stakeholders to deliver business outcomes with measurable improvements.",
+        },
+    ]
+    return {
+        "score": score,
+        "matched_keywords": matched_keywords[:8],
+        "missing_keywords": missing_keywords[:8],
+        "missing_information": [
+            "Add evidence for any skill the resume cannot support with real examples.",
+            "Keep numerical outcomes truthful and only include facts the user can verify.",
+        ],
+        "suggestions": suggestions,
+        "summary": summary,
+        "changes_summary": f"{len(suggestions)} targeted edits recommended for {request.target_role} alignment.",
+        "source_note": "Generated from the provided job description and the user's current resume evidence. Missing details should be validated before use.",
+    }
+
+
+@app.get("/api/resume/versions")
+def resume_versions_list(target_role: str | None = None) -> dict[str, list[dict]]:
+    versions = list_resume_versions(target_role)
+    return {"versions": versions}
+
+
+@app.post("/api/resume/versions")
+def resume_version_create(request: ResumeVersionRequest) -> dict:
+    if not request.target_role.strip():
+        raise HTTPException(status_code=400, detail="target_role is required.")
+    if not request.result:
+        raise HTTPException(status_code=400, detail="result is required to save a resume version.")
+    saved = save_resume_version(
+        request.target_role.strip(),
+        request.version_name.strip() or f"{request.target_role.strip()} draft",
+        request.summary.strip() or "Resume optimization draft",
+        int(request.score),
+        request.result,
+    )
+    return saved
+
+
+@app.delete("/api/resume/versions/{version_id}")
+def resume_version_delete(version_id: int) -> dict[str, bool]:
+    if not delete_resume_version(version_id):
+        raise HTTPException(status_code=404, detail="Resume version not found.")
+    return {"deleted": True}
+
+
 @app.post("/api/jobs/match")
 def job_description_match(request: JobMatchRequest) -> dict[str, object]:
     try:
@@ -281,13 +759,24 @@ def profile_update(request: ProfileRequest) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/api/roadmap/progress/{target_role}/history")
+def roadmap_progress_history(target_role: str) -> dict[str, list[dict]]:
+    if target_role not in JOB_ROLE_SKILL_CATALOG:
+        raise HTTPException(status_code=400, detail=f"Unknown target role: {target_role}.")
+    return {"history": list_roadmap_progress_history(target_role)}
+
+
 @app.get("/api/roadmap/progress/{target_role}")
 def roadmap_progress(target_role: str) -> dict[str, list[int]]:
+    if target_role not in JOB_ROLE_SKILL_CATALOG:
+        raise HTTPException(status_code=400, detail=f"Unknown target role: {target_role}.")
     return {"completed_days": get_roadmap_progress(target_role)}
 
 
 @app.put("/api/roadmap/progress")
 def roadmap_progress_update(request: RoadmapProgressRequest) -> dict[str, list[int]]:
+    if request.target_role not in JOB_ROLE_SKILL_CATALOG:
+        raise HTTPException(status_code=400, detail=f"Unknown target role: {request.target_role}.")
     if any(day < 1 or day > 30 for day in request.completed_days):
         raise HTTPException(
             status_code=400,
@@ -314,6 +803,16 @@ def save_job_match_result(request: SaveJobMatchRequest) -> dict:
         raise HTTPException(
             status_code=400,
             detail="description must contain at least 20 characters.",
+        )
+    if len(request.description) > 20_000:
+        raise HTTPException(
+            status_code=400,
+            detail="description must be 20,000 characters or fewer.",
+        )
+    if len(request.title.strip()) > 200 or len(request.company.strip()) > 200:
+        raise HTTPException(
+            status_code=400,
+            detail="title and company must be 200 characters or fewer.",
         )
     return save_job_match(
         request.title.strip(),

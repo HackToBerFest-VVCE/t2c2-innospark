@@ -27,6 +27,12 @@ def test_roadmap_has_30_tasks_grouped_into_four_weeks() -> None:
         for task in week["tasks"]
     ] == list(range(1, 31))
     assert roadmap["tasks"][-1]["topic"] == "Python Developer mini-project"
+    for task in roadmap["tasks"]:
+        assert task["skill"]
+        assert task["difficulty"] in {"Foundational", "Intermediate", "Advanced"}
+        assert task["completion_criteria"]
+        assert task["learning_activity"]
+        assert task["estimated_minutes"] == 60
 
 
 def test_roadmap_prioritizes_missing_required_skills() -> None:

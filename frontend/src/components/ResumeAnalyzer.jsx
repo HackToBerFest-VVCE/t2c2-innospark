@@ -12,6 +12,13 @@ export function ResumeAnalyzer({
   result,
   error,
   analyze,
+  optimizeResume,
+  saveResumeVersion,
+  deleteResumeVersion,
+  resumeOptimization,
+  resumeVersions = [],
+  resumeVersionsLoading = false,
+  resumeVersionsError = '',
   loadSampleResume,
   skills = [],
   _setSkills,
@@ -29,6 +36,9 @@ export function ResumeAnalyzer({
   const [reportError, setReportError] = useState('')
   const [showFullResumeModal, setShowFullResumeModal] = useState(false)
   const [expandedMatched, setExpandedMatched] = useState(false)
+  const [jobDescription, setJobDescription] = useState('')
+  const [optimizerLoading, setOptimizerLoading] = useState(false)
+  const [optimizerError, setOptimizerError] = useState('')
 
   // Interactive Dropdown states
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false)
@@ -63,6 +73,9 @@ export function ResumeAnalyzer({
     result?.summary_text ||
     result?.section_content?.summary ||
     'Upload and analyze a PDF resume to see extracted evidence.'
+  const extractedSkillsCount = result?.extracted_skills_count ?? skills.length
+  const hardSkillsCount = result?.hard_skills_count ?? extractedSkillsCount
+  const softSkillsCount = result?.soft_skills_count ?? 0
 
   // Skills lists (dynamically updated if gap data is available)
   const matchedSkillsList = useMemo(() => {
@@ -122,6 +135,31 @@ export function ResumeAnalyzer({
     setResume(file)
   }
 
+  async function handleOptimize() {
+    if (!optimizeResume || !jobDescription?.trim()) {
+      setOptimizerError('Paste a job description to optimize this resume.')
+      return
+    }
+    setOptimizerLoading(true)
+    setOptimizerError('')
+    try {
+      await optimizeResume(jobDescription, summaryText)
+    } catch (error) {
+      setOptimizerError(error.message || 'Could not optimize the resume.')
+    } finally {
+      setOptimizerLoading(false)
+    }
+  }
+
+  async function handleSaveVersion() {
+    if (!saveResumeVersion || !resumeOptimization) return
+    try {
+      await saveResumeVersion(`Resume draft for ${role}`, resumeOptimization.score, resumeOptimization)
+    } catch (error) {
+      setOptimizerError(error.message || 'Could not save a resume version.')
+    }
+  }
+
   async function handleDownloadPDFReport() {
     setDownloadingReport(true)
     setReportError('')
@@ -163,25 +201,32 @@ export function ResumeAnalyzer({
         <span className="crumb-current">Resume Analyzer</span>
       </div>
 
-      {/* Page Header */}
-      <div className="analyzer-header-row">
+      {/* Page Header with Cyber-Gold Neural Redesign & Parallax */}
+      <div className="analyzer-header-row page-intro-neural">
+        <div className="page-intro-glow" aria-hidden="true" />
+        <div className="page-intro-circuits" aria-hidden="true">
+          <svg viewBox="0 0 600 160" fill="none" preserveAspectRatio="none">
+            <path d="M0 30 H180 V90 H340" className="intro-circuit-line" />
+            <circle cx="180" cy="30" r="3" className="intro-circuit-node" />
+            <circle cx="340" cy="90" r="3.5" className="intro-circuit-node active" />
+          </svg>
+        </div>
         <div className="analyzer-title-group">
-          <div className="analyzer-title-badge">
-            <Icon name="sparkle" size={24} />
+          <div className="intro-cyber-badge">
+            <span className="pulse-dot" />
+            <span className="eyebrow-text">AI-POWERED RESUME INTELLIGENCE · PAR PARSING ENGINE</span>
           </div>
-          <div>
-            <h1>Resume Analyzer</h1>
-            <p>
-              Get AI-powered insights from your resume. Extract skills, identify gaps, and get personalized
-              recommendations to advance your career.
-            </p>
-          </div>
+          <h1 className="intro-headline">Resume Neural Analyzer</h1>
+          <p className="intro-description">
+            Get deterministic AI-powered insights from your resume. Extract skills, identify gaps, and get personalized
+            recommendations to advance your career.
+          </p>
         </div>
 
         <div className="analyzer-header-actions">
           <button
             type="button"
-            className="use-sample-btn"
+            className="hero-btn-primary"
             onClick={loadSampleResume}
             disabled={loading}
           >
@@ -319,6 +364,83 @@ export function ResumeAnalyzer({
           {error && (
             <div className="analyzer-inline-error" style={{ marginTop: '12px' }}>
               <Icon name="close" size={14} /> {error}
+            </div>
+          )}
+
+          {resume && (
+            <div className="resume-optimizer-card">
+              <div className="role-card-header">
+                <div className="role-icon-badge">
+                  <Icon name="sparkle" size={18} />
+                </div>
+                <div className="role-card-titles">
+                  <strong>Resume optimizer</strong>
+                  <span>Paste a target job description to compare your resume.</span>
+                </div>
+              </div>
+
+              <textarea
+                className="resume-optimizer-input"
+                value={jobDescription}
+                onChange={(event) => setJobDescription(event.target.value)}
+                placeholder="Paste the job description here to identify missing keywords, summary improvements, and role-alignment suggestions..."
+                rows="5"
+              />
+
+              <button type="button" className="button primary compact" onClick={handleOptimize} disabled={optimizerLoading || !jobDescription.trim()}>
+                {optimizerLoading ? 'Optimizing...' : 'Analyze resume fit'}
+              </button>
+
+              {optimizerError && <div className="inline-error" role="alert"><Icon name="close" size={13} /> {optimizerError}</div>}
+
+              {resumeOptimization && (
+                <div className="resume-optimizer-result">
+                  <div className="resume-optimizer-meta">
+                    <strong>{resumeOptimization.score}% relevance</strong>
+                    <span>{resumeOptimization.changes_summary}</span>
+                  </div>
+                  <ul>
+                    {resumeOptimization.matched_keywords?.slice(0, 4).map((item) => (
+                      <li key={item}>Matched keyword: {item}</li>
+                    ))}
+                    {resumeOptimization.missing_keywords?.slice(0, 4).map((item) => (
+                      <li key={item}>Consider adding: {item}</li>
+                    ))}
+                  </ul>
+                  {resumeOptimization.suggestions?.map((suggestion) => (
+                    <div key={`${suggestion.section}-${suggestion.reason}`} className="resume-optimizer-suggestion">
+                      <strong>{suggestion.section}</strong>
+                      <p>{suggestion.reason}</p>
+                      <div className="resume-suggestion-diff">
+                        <span>Before: {suggestion.before}</span>
+                        <span>After: {suggestion.after}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="resume-optimizer-actions">
+                    <button type="button" className="button secondary compact" onClick={handleSaveVersion}>Save version</button>
+                  </div>
+                </div>
+              )}
+
+              {resumeVersions.length > 0 && (
+                <div className="resume-version-list">
+                  <strong>Saved versions</strong>
+                  {resumeVersionsLoading && <div className="empty-state small">Loading versions…</div>}
+                  {!resumeVersionsLoading && resumeVersionsError && <div className="inline-error" role="alert"><Icon name="close" size={13} /> {resumeVersionsError}</div>}
+                  {resumeVersions.map((version) => (
+                    <div key={version.id} className="resume-version-item">
+                      <div>
+                        <strong>{version.version_name}</strong>
+                        <span>{version.score}% match • {new Date(version.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <button type="button" className="icon-button" onClick={() => deleteResumeVersion?.(version.id)} aria-label={`Delete ${version.version_name}`}>
+                        <Icon name="close" size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
