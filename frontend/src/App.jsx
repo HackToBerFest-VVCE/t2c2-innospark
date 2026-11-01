@@ -43,9 +43,10 @@ import {
 } from './services/api'
 import './App.css'
 
-import { Sidebar } from './components/Sidebar'
+import { TceNavbar } from './components/TceNavbar'
+import { TceFooter } from './components/TceFooter'
+import { TceInquiryButton } from './components/TceInquiryButton'
 import { NAVIGATION_ITEMS } from './constants/navigation'
-import { Topbar } from './components/Topbar'
 import { Overview } from './components/Overview'
 import { ResumeAnalyzer } from './components/ResumeAnalyzer'
 import { Recommendations } from './components/Recommendations'
@@ -457,7 +458,7 @@ function App() {
     [selectedRole]
   )
 
-  const currentPage = useMemo(
+  const _currentPage = useMemo(
     () => NAVIGATION_ITEMS.find((item) => item.id === page) || { id: page, label: 'Settings' },
     [page]
   )
@@ -985,31 +986,20 @@ function App() {
           <circle cx="850" cy="400" r="4" className="global-circuit-dot active" />
         </svg>
       </div>
-      <Sidebar
+      <TceNavbar
         page={page}
         navigate={navigate}
-        mobileNav={mobileNav}
-        setMobileNav={setMobileNav}
-        apiStatus={apiStatus}
-        setApiStatus={setApiStatus}
+        dark={dark}
+        setDark={setDark}
         name={profileName}
         experienceLevel={experienceLevel}
+        setProfileName={setProfileName}
+        setExperienceLevel={setExperienceLevel}
+        mobileNav={mobileNav}
+        setMobileNav={setMobileNav}
       />
 
       <main className="main-area" id="main-content">
-        <Topbar
-          currentPage={currentPage}
-          setMobileNav={setMobileNav}
-          dark={dark}
-          setDark={setDark}
-          isRealResume={isRealResume}
-          resumeResult={resumeResult}
-          name={profileName}
-          experienceLevel={experienceLevel}
-          setProfileName={setProfileName}
-          setExperienceLevel={setExperienceLevel}
-        />
-
         <div className="content">
           {page === 'overview' && (
             <Overview
@@ -1279,7 +1269,9 @@ function App() {
             />
           )}
         </div>
+        <TceFooter navigate={navigate} />
       </main>
+      <TceInquiryButton navigate={navigate} />
     </div>
   )
 }

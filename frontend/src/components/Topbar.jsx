@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Icon } from './common/Icons'
 
 export function Topbar({
+  _currentPage,
+  navigate,
   setMobileNav,
   dark,
   setDark,
@@ -31,7 +33,7 @@ export function Topbar({
   }
 
   return (
-    <header className="topbar">
+    <header className="topbar tce-topbar" role="banner">
       <div className="topbar-left">
         <button
           type="button"
@@ -42,19 +44,42 @@ export function Topbar({
           <Icon name="menu" />
         </button>
 
-        <div className="search-container">
+        {/* Brand identity on mobile or topbar */}
+        <div className="tce-topbar-brand-display">
+          <img
+            src={dark ? '/tataconsultingengineers-white.png' : '/tataconsultingengineers-blue.png'}
+            alt="Tata Consulting Engineers"
+            className="tce-topbar-logo"
+            onClick={() => navigate?.('overview')}
+            role="button"
+            tabIndex={0}
+          />
+        </div>
+
+        <div className="search-container tce-search-container">
           <Icon name="search" size={16} className="search-icon" />
           <input
             type="text"
             className="topbar-search-input"
-            placeholder="Search features, skills, or anything..."
-            aria-label="Search features, skills, or anything"
+            placeholder="Search engineering disciplines, skills, sectors, jobs..."
+            aria-label="Search engineering disciplines, skills, sectors, jobs"
           />
           <span className="search-shortcut">Ctrl + K</span>
         </div>
       </div>
 
       <div className="top-actions">
+        {/* Quick Hub Jump Button */}
+        <button
+          type="button"
+          className="tce-quick-hub-btn"
+          onClick={() => navigate?.('tce-hub')}
+          title="Explore Tata Consulting Engineers Business Sectors & Projects"
+        >
+          <span className="tce-hub-dot" />
+          <span>TCE Engineering Hub</span>
+        </button>
+
         {/* Sun & Moon Theme Toggle Capsule */}
         <div
           className="theme-capsule-toggle"
@@ -62,7 +87,8 @@ export function Topbar({
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === 'Enter' && setDark(!dark)}
-          aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={dark ? 'Switch to light corporate mode' : 'Switch to dark executive mode'}
+          title={dark ? 'Switch to Light Corporate Mode' : 'Switch to Dark Executive Mode'}
         >
           <span className={`theme-capsule-icon ${!dark ? 'active' : ''}`}>
             <Icon name="sun" size={15} />
@@ -87,7 +113,7 @@ export function Topbar({
         {/* User Profile Capsule with Interactive Options Menu */}
         <div className="profile-menu-container" ref={profileMenuRef}>
           <div
-            className="user-profile-capsule"
+            className="user-profile-capsule tce-profile-capsule"
             tabIndex={0}
             role="button"
             aria-label="User profile options menu"
@@ -96,12 +122,11 @@ export function Topbar({
             onKeyDown={(e) => e.key === 'Enter' && setIsProfileMenuOpen((prev) => !prev)}
           >
             <div className="user-avatar-wrapper">
-              <div className="user-avatar-img">
-                {/* Profile avatar graphic */}
+              <div className="user-avatar-img tce-avatar">
                 <svg viewBox="0 0 36 36" width="32" height="32" fill="none">
-                  <circle cx="18" cy="18" r="18" fill="#1e293b" />
-                  <circle cx="18" cy="14" r="6" fill="#38bdf8" />
-                  <path d="M7 32c0-6.075 4.925-11 11-11s11 4.925 11 11" fill="#0284c7" />
+                  <circle cx="18" cy="18" r="18" fill="#072146" />
+                  <circle cx="18" cy="14" r="6" fill="#0080C6" />
+                  <path d="M7 32c0-6.075 4.925-11 11-11s11 4.925 11 11" fill="#F89420" />
                 </svg>
               </div>
             </div>

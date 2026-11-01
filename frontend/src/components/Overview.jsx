@@ -318,21 +318,21 @@ export function Overview({
         <div className="hero-grid-container">
           {/* Left Column: AI Career Agent Intelligence & Interaction */}
           <div className="hero-copy-column">
-            <div className="hero-cyber-badge">
+            <div className="hero-cyber-badge tce-hero-badge">
               <span className="pulse-dot" />
-              <span className="badge-text">AI-POWERED CAREER AGENT</span>
+              <span className="badge-text">SKILLBRIDGE AI</span>
               <span className="badge-sep">•</span>
-              <span className="badge-sub">NEURAL ENGINE v2.4</span>
+              <span className="badge-sub">AUTONOMOUS CAREER AGENT</span>
             </div>
 
             <h1 className="hero-headline">
-              Stop Waiting.{' '}
-              <span className="gold-gradient-text">Start Earning</span>{' '}
-              with Next&#8209;Gen AI Career Precision.
+              Engineering Your Career.{' '}
+              <span className="gold-gradient-text tce-gradient-text">Concept to Placement</span>{' '}
+              with AI Precision.
             </h1>
 
             <p className="hero-lead">
-              Your autonomous, evidence-based career navigator. Turn analyzed resume skills into transparent role matches, a tailored 30-day learning curriculum, and verified real-world job fit.
+              Your autonomous, evidence-based career navigator engineered with industrial precision. Transform your resume experience into transparent role matches, a prioritized skill-gap breakdown, and a tailored 30-day learning curriculum.
             </p>
 
             {/* Target Career Path Interactive Control Deck */}
